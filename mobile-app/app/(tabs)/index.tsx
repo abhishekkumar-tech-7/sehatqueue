@@ -1,14 +1,22 @@
-import { StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { Button } from '../../components/Button';
+import Colors from '../../constants/Colors';
+import { Spacing, FontSize } from '../../constants/Spacing';
 
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
+export default function WelcomeScreen() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme as 'light' | 'dark'];
 
-export default function TabOneScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Tab One</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(tabs)/index.tsx" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>SehatQueue</Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        Book your doctor's appointment or clinic token from home
+      </Text>
+
+      <View style={styles.buttonGroup}>
+        <Button title="Get Started" onPress={() => {}} variant="primary" />
+      </View>
     </View>
   );
 }
@@ -16,16 +24,21 @@ export default function TabOneScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
   },
   title: {
-    fontSize: 20,
+    fontSize: FontSize.title,
     fontWeight: 'bold',
+    marginBottom: Spacing.sm,
   },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: '80%',
+  subtitle: {
+    fontSize: FontSize.body,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  buttonGroup: {
+    width: '100%',
   },
 });
