@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
@@ -16,9 +16,15 @@ type AuthState = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  refreshProfile: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthState>({ session: null, profile: null, loading: true });
+const AuthContext = createContext<AuthState>({
+  session: null,
+  profile: null,
+  loading: true,
+  refreshProfile: async () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -40,26 +46,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Whenever the logged-in user changes, load their profile (RLS only allows their own).
+  const loadProfile = useCallback(async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    setProfile(data as Profile | null);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     const userId = session?.user.id;
-    if (!userId) return;
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-      .then(({ data }) => {
-        setProfile(data as Profile | null);
-        setLoading(false);
-      });
-  }, [session?.user.id]);
+    if (userId) loadProfile(userId);
+  }, [session?.user.id, loadProfile]);
+
+  const refreshProfile = useCallback(async () => {
+    if (session?.user.id) await loadProfile(session.user.id);
+  }, [session?.user.id, loadProfile]);
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, profile, loading, refreshProfile }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
   return useContext(AuthContext);
-}  
+} 
