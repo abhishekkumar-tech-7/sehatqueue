@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useColorScheme } from 'react-native';
 import { TextField } from '../../components/TextField';
@@ -120,21 +121,26 @@ export default function SearchScreen() {
             .filter(Boolean)
             .join(', ');
           return (
-            <Card>
-              <Text style={[styles.doctorName, { color: colors.text }]}>{item.display_name}</Text>
-              {specialtyNames ? (
-                <Text style={[styles.detail, { color: colors.textMuted }]}>{specialtyNames}</Text>
-              ) : null}
-              {item.qualifications ? (
-                <Text style={[styles.detail, { color: colors.textMuted }]}>{item.qualifications}</Text>
-              ) : null}
-              {clinic ? (
-                <Text style={[styles.clinic, { color: colors.primary }]}>
-                  {clinic.name}, {clinic.locality ? clinic.locality + ', ' : ''}
-                  {clinic.city}
-                </Text>
-              ) : null}
-            </Card>
+            <Pressable
+              onPress={() => router.push({ pathname: '/doctor/[id]', params: { id: item.id } } as any)}
+              accessibilityRole="button"
+            >
+              <Card>
+                <Text style={[styles.doctorName, { color: colors.text }]}>{item.display_name}</Text>
+                {specialtyNames ? (
+                  <Text style={[styles.detail, { color: colors.textMuted }]}>{specialtyNames}</Text>
+                ) : null}
+                {item.qualifications ? (
+                  <Text style={[styles.detail, { color: colors.textMuted }]}>{item.qualifications}</Text>
+                ) : null}
+                {clinic ? (
+                  <Text style={[styles.clinic, { color: colors.primary }]}>
+                    {clinic.name}, {clinic.locality ? clinic.locality + ', ' : ''}
+                    {clinic.city}
+                  </Text>
+                ) : null}
+              </Card>
+            </Pressable>
           );
         }}
       />
