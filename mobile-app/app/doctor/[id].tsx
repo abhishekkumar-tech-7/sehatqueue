@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useColorScheme, Alert, Image } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { LoadingView, ErrorView } from '../../components/StateViews';
@@ -33,7 +33,6 @@ type DoctorDetail = {
   }[];
 };
 
-// "09:00:00" -> "9:00 AM"
 function formatTime(value: string) {
   const [h, m] = value.split(':').map(Number);
   const suffix = h >= 12 ? 'PM' : 'AM';
@@ -41,7 +40,6 @@ function formatTime(value: string) {
   return `${hour12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-// "2026-09-28" -> "Mon, 28 Sep"
 function formatDate(value: string) {
   const [y, m, d] = value.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
@@ -51,7 +49,6 @@ function formatDate(value: string) {
   });
 }
 
-// Today's date in India (IST = UTC+5:30), as YYYY-MM-DD.
 function todayInIndia() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
@@ -64,6 +61,7 @@ export default function DoctorProfileScreen() {
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bookingSessionId, setBookingSessionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -89,6 +87,26 @@ export default function DoctorProfileScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function handleBookToken(sessionId: string) {
+    setBookingSessionId(sessionId);
+    const { data, error: bookError } = await supabase.rpc('book_token', {
+      p_session_id: sessionId,
+    });
+    setBookingSessionId(null);
+
+    if (bookError) {
+      Alert.alert('Could not book', bookError.message);
+      return;
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    Alert.alert(
+      'Token booked',
+      `Your token number is ${result.token_number}.\nReference: ${result.booking_reference}`
+    );
+    load(); // refresh so capacity/etc reflect the new booking
+  }
 
   if (loading) return <LoadingView message="Loading doctor..." />;
   if (error || !doctor) {
@@ -181,11 +199,22 @@ export default function DoctorProfileScreen() {
                     </Text>
                   ) : null}
                   <View style={{ height: Spacing.md }} />
-                  <Button
-                    title={s.booking_mode === 'TOKEN' ? 'Book Token' : 'Book Appointment'}
-                    onPress={() => Alert.alert('Coming next', 'Booking is built in the next step.')}
-                    variant="primary"
-                  />
+                  {s.booking_mode === 'TOKEN' ? (
+                    <Button
+                      title="Book Token"
+                      onPress={() => handleBookToken(s.id)}
+                      variant="primary"
+                      loading={bookingSessionId === s.id}
+                    />
+                  ) : (
+                    <Button
+                      title="Book Appointment"
+                      onPress={() =>
+                        router.push({ pathname: '/booking/slot', params: { sessionId: s.id } } as any)
+                      }
+                      variant="primary"
+                    />
+                  )}
                 </Card>
               ))
             )}
@@ -217,4 +246,4 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.md, marginBottom: Spacing.sm },
   sessionDate: { fontSize: FontSize.large, fontWeight: '600' },
   note: { fontSize: FontSize.small, marginTop: Spacing.sm },
-}); 
+});  
