@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, useColorScheme, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useColorScheme, Image } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -61,7 +61,6 @@ export default function DoctorProfileScreen() {
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [bookingSessionId, setBookingSessionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -87,26 +86,6 @@ export default function DoctorProfileScreen() {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function handleBookToken(sessionId: string) {
-    setBookingSessionId(sessionId);
-    const { data, error: bookError } = await supabase.rpc('book_token', {
-      p_session_id: sessionId,
-    });
-    setBookingSessionId(null);
-
-    if (bookError) {
-      Alert.alert('Could not book', bookError.message);
-      return;
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    Alert.alert(
-      'Token booked',
-      `Your token number is ${result.token_number}.\nReference: ${result.booking_reference}`
-    );
-    load(); // refresh so capacity/etc reflect the new booking
-  }
 
   if (loading) return <LoadingView message="Loading doctor..." />;
   if (error || !doctor) {
@@ -202,9 +181,10 @@ export default function DoctorProfileScreen() {
                   {s.booking_mode === 'TOKEN' ? (
                     <Button
                       title="Book Token"
-                      onPress={() => handleBookToken(s.id)}
+                      onPress={() =>
+                        router.push({ pathname: '/booking/token', params: { sessionId: s.id } } as any)
+                      }
                       variant="primary"
-                      loading={bookingSessionId === s.id}
                     />
                   ) : (
                     <Button

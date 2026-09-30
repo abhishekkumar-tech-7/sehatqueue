@@ -62,7 +62,20 @@ export default function TabLayout() {
             />  
           ),
         }}
-      />  
+      /> 
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: 'Bookings',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'calendar', android: 'event', web: 'event'}}
+              tintColor={color}
+              size={26}
+            />
+          ),
+        }} 
+      />   
     </Tabs>
   );
-}  
+}       
