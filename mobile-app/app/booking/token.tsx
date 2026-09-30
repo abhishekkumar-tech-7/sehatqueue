@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, useColorScheme, Alert } from 'react-native';
+import { View, Text, StyleSheet,ScrollView, Pressable, useColorScheme, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Button } from '../../components/Button';
 import { LoadingView, ErrorView } from '../../components/StateViews';
@@ -109,7 +109,7 @@ export default function TokenBookingScreen() {
         Select up to {MAX_SELECTABLE} tokens (e.g. for family members). Times shown are estimates, not guaranteed.
       </Text>
 
-      <View style={styles.grid}>
+      <ScrollView contentContainerStyle={styles.grid}>
         {tokens.map((t) => {
           const isSelected = selected.has(t.token_number);
           return (
@@ -152,7 +152,7 @@ export default function TokenBookingScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       {selected.size > 0 && (
         <View style={styles.footer}>
@@ -182,4 +182,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
   },
   footer: { marginTop: Spacing.lg },
-});  
+});     
