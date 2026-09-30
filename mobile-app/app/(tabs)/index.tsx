@@ -1,34 +1,16 @@
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
-import { Button } from '../../components/Button';
-import { LoadingView } from '../../components/StateViews';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/AuthContext';
-import Colors from '../../constants/Colors';
-import { Spacing, FontSize } from '../../constants/Spacing';
+import { LoadingView } from '../../components/StateViews';
+import PatientHome from '../../components/PatientHome';
+import DoctorHome from '../../components/DoctorHome';
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme as 'light' | 'dark'];
   const { profile, loading } = useAuth();
 
   if (loading || !profile) return <LoadingView message="Loading your account..." />;
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Hello, {profile.full_name}</Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        Signed in as {profile.role.toLowerCase()}
-      </Text>
-      <View style={styles.buttonGroup}>
-        <Button title="Log Out" onPress={() => supabase.auth.signOut()} variant="secondary" />
-      </View>
-    </View>
-  );
-}
+  if (profile.role === 'DOCTOR') {
+    return <DoctorHome profile={profile} />;
+  }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
-  title: { fontSize: FontSize.title, fontWeight: 'bold', marginBottom: Spacing.sm, textAlign: 'center' },
-  subtitle: { fontSize: FontSize.body, marginBottom: Spacing.xl },
-  buttonGroup: { width: '100%' },
-}); 
+  return <PatientHome profile={profile} />;
+} 
