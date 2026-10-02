@@ -21,6 +21,7 @@ type SessionInfo = {
   last_token_issued: number;
   capacity: number;
   booking_mode: 'TOKEN' | 'SLOT';
+  status: string;
 };
 
 function formatTime(iso: string) {
@@ -44,7 +45,7 @@ export default function QueueScreen() {
     const [sessionResult, bookingsResult] = await Promise.all([
       supabase
         .from('clinic_sessions')
-        .select('current_token, last_token_issued, capacity, booking_mode')
+        .select('current_token, last_token_issued, capacity, booking_mode, status')
         .eq('id', sessionId)
         .single(),
       supabase
@@ -85,6 +86,19 @@ export default function QueueScreen() {
     load();
   }
 
+  async function handleStatusChange(newStatus: 'OPEN' | 'PAUSED' | 'CLOSED') {
+    const { error: statusError } = await supabase.rpc('update_session_status', {
+      p_session_id: sessionId,
+      p_new_status: newStatus,
+    });
+
+    if (statusError) {
+      Alert.alert('Could not update session', statusError.message);
+      return;
+    }
+    load();
+  }
+
   async function handleStatusUpdate(bookingId: string, status: 'COMPLETED' | 'NO_SHOW' | 'SKIPPED') {
     setActioningId(bookingId);
     const { error: updateError } = await supabase.rpc('update_booking_status', {
@@ -117,6 +131,30 @@ export default function QueueScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'Queue' }} />
 
+      <Card>
+        <Text style={[styles.currentLabel, { color: colors.textMuted }]}>Session status</Text>
+        <Text style={[styles.currentToken, { color: session.status === 'OPEN' ? colors.success : colors.warning }]}>
+          {session.status}
+        </Text>
+        <View style={styles.actionRow}>
+          {session.status === 'OPEN' && (
+            <View style={styles.actionButton}>
+              <Button title="Pause" onPress={() => handleStatusChange('PAUSED')} variant="secondary" />
+            </View>
+          )}
+          {session.status === 'PAUSED' && (
+            <View style={styles.actionButton}>
+              <Button title="Resume" onPress={() => handleStatusChange('OPEN')} variant="primary" />
+            </View>
+          )}
+          {(session.status === 'OPEN' || session.status === 'PAUSED') && (
+            <View style={styles.actionButton}>
+              <Button title="Close Session" onPress={() => handleStatusChange('CLOSED')} variant="danger" />
+            </View>
+          )}
+        </View>
+      </Card>
+
       {session.booking_mode === 'TOKEN' && (
         <Card>
           <Text style={[styles.currentLabel, { color: colors.textMuted }]}>Currently calling</Text>
@@ -129,7 +167,7 @@ export default function QueueScreen() {
               onPress={handleCallNext}
               variant="primary"
               loading={callingNext}
-              disabled={session.current_token >= session.last_token_issued}
+              disabled={session.current_token >= session.last_token_issued || session.status !== 'OPEN'}
             />
           </View>
         </Card>
