@@ -14,10 +14,7 @@ export default function PatientHome({ profile }: { profile: Profile }) {
       <Text style={[styles.title, { color: colors.text }]}>Hello, {profile.full_name}</Text>
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Search for a doctor to book a token or appointment.
-      </Text>
-      <View style={styles.buttonGroup}>
-        <Button title="Log Out" onPress={() => supabase.auth.signOut()} variant="secondary" />
-      </View>
+      </Text>    
     </View>
   );
 }

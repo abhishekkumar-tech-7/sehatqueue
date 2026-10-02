@@ -121,9 +121,9 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
         <RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={colors.primary} />
       }
     >
-      <Text style={[styles.title, { color: colors.text }]}>Hello, Dr. {profile.full_name}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Hello, {profile.full_name}</Text>
 
-      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}>
+      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}>  
         <Button
           title="+ New Session"
           onPress={() => router.push('/doctor-portal/new-session' as any)}
@@ -167,15 +167,8 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
         ))
       )}
 
-      <View style={styles.buttonGroup}>
-        <Button
-          title="Log Out"
-          onPress={() => supabase.auth.signOut()}
-          variant="secondary"
-        />
-      </View>
     </ScrollView>
-  );
+  );   
 }
 
 const styles = StyleSheet.create({
