@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, RefreshControl } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
 import { Button } from './Button';
 import { LoadingView, ErrorView, EmptyView } from './StateViews';
@@ -8,7 +8,6 @@ import { supabase } from '../lib/supabase';
 import { Profile } from '../lib/AuthContext';
 import Colors from '../constants/Colors';
 import { Spacing, FontSize } from '../constants/Spacing';
-import { useFocusEffect } from 'expo-router';
 
 type SessionRow = {
   id: string;
@@ -95,11 +94,12 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
   }, [profile.id]);
 
   useFocusEffect(
-    useCallback(()=> {
+    useCallback(() => {
       setLoading(true);
       load();
     }, [load])
   );
+
   if (loading) return <LoadingView message="Loading your dashboard..." />;
   if (error) {
     return (
@@ -115,20 +115,28 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
 
   return (
     <ScrollView
-     style={{ backgroundColor: colors.background }}
-     contentContainerStyle={styles.container}
-     refreshControl={
-       <RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={colors.primary} />
-     }
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={colors.primary} />
+      }
     >
       <Text style={[styles.title, { color: colors.text }]}>Hello, Dr. {profile.full_name}</Text>
-      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md}}>
+
+      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}>
         <Button
           title="+ New Session"
           onPress={() => router.push('/doctor-portal/new-session' as any)}
           variant="primary"
         />
-      </View>  
+        <View style={{ height: Spacing.sm }} />
+        <Button
+          title="Edit My Profile"
+          onPress={() => router.push('/doctor-portal/edit-profile' as any)}
+          variant="secondary"
+        />
+      </View>
+
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>Today's sessions</Text>
 
       {sessions.length === 0 ? (
@@ -178,4 +186,4 @@ const styles = StyleSheet.create({
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   buttonGroup: { marginTop: Spacing.lg },
-});   
+});  

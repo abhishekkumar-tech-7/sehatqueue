@@ -75,7 +75,8 @@ function RootLayoutNav() {
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         <Stack.Screen name="doctor-portal/queue" options={{ headerShown: true }} />
         <Stack.Screen name="doctor-portal/new-session" options={{ headerShown: true }} />
+        <Stack.Screen name="doctor-portal/edit-profile" options={{ headerShown: true }} />
       </Stack>  
-    </ThemeProvider>
+    </ThemeProvider>   
   );  
 }   
