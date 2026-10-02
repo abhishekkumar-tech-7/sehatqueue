@@ -3,6 +3,7 @@ import { LoadingView } from '../../components/StateViews';
 import PatientHome from '../../components/PatientHome';
 import DoctorHome from '../../components/DoctorHome';
 import AdminHome from '../../components/AdminHome';
+import ReceptionistHome from '../../components/ReceptionistHome';
 
 export default function HomeScreen() {
   const { profile, loading } = useAuth();
@@ -15,6 +16,10 @@ export default function HomeScreen() {
 
   if (profile.role === 'ADMIN') {
     return <AdminHome profile={profile} />;
+  }
+
+  if (profile.role === 'RECEPTIONIST') {
+    return <ReceptionistHome profile={profile} />;
   }
 
   return <PatientHome profile={profile} />;

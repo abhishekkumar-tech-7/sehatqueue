@@ -187,6 +187,12 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
           onPress={() => router.push('/doctor-portal/edit-profile' as any)}
           variant="secondary"
         />
+        <View style={{ height: Spacing.sm }} />
+        <Button
+          title="Add Receptionist"
+          onPress={() => router.push('/doctor-portal/add-receptionist' as any)}
+          variant="secondary"
+        />
       </View>
 
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>Today's sessions</Text>
@@ -215,7 +221,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
               </Text>
               <Text style={[styles.status, { color: colors.warning }]}>{s.status}</Text>
             </Card>
-          </Pressable>
+          </Pressable>   
         ))
       )}
     </ScrollView>
