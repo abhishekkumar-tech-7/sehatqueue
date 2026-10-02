@@ -113,9 +113,7 @@ export default function NewSessionScreen() {
     );
   }
   if (clinics.length === 0) {
-    return (
-      <ErrorView message="You are not linked to any clinic yet. Contact an administrator to get set up." />
-    );
+    return <ClinicSetupForm onDone={load} />;
   }
 
   return (
@@ -196,3 +194,63 @@ const styles = StyleSheet.create({
   chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1 },
   buttonGroup: { marginTop: Spacing.lg },
 });  
+function ClinicSetupForm({ onDone }: { onDone: () => void }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme as 'light' | 'dark'];
+
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [locality, setLocality] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate() {
+    if (!name.trim() || !address.trim() || !city.trim() || !state.trim()) {
+      Alert.alert('Missing details', 'Please fill in at least name, address, city and state.');
+      return;
+    }
+
+    setSaving(true);
+    const { error: createError } = await supabase.rpc('create_my_clinic', {
+      p_name: name.trim(),
+      p_address: address.trim(),
+      p_locality: locality.trim() || null,
+      p_city: city.trim(),
+      p_state: state.trim(),
+      p_postal_code: postalCode.trim() || null,
+      p_phone: phone.trim() || null,
+    });
+    setSaving(false);
+
+    if (createError) {
+      Alert.alert('Could not create clinic', createError.message);
+      return;
+    }
+
+    onDone();
+  }
+
+  return (
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
+      <Stack.Screen options={{ title: 'Set Up Your Clinic' }} />
+      <Text style={[styles.label, { color: colors.text, marginTop: 0 }]}>
+        You're not linked to a clinic yet. Add your clinic details to get started.
+      </Text>
+
+      <TextField label="Clinic Name" value={name} onChangeText={setName} />
+      <TextField label="Address" value={address} onChangeText={setAddress} />
+      <TextField label="Locality (optional)" value={locality} onChangeText={setLocality} />
+      <TextField label="City" value={city} onChangeText={setCity} />
+      <TextField label="State" value={state} onChangeText={setState} />
+      <TextField label="Postal Code (optional)" value={postalCode} onChangeText={setPostalCode} />
+      <TextField label="Phone (optional)" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+
+      <View style={styles.buttonGroup}>
+        <Button title="Create Clinic" onPress={handleCreate} variant="primary" loading={saving} />
+      </View>
+    </ScrollView>
+  );
+}     

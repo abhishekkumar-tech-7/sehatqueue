@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, useColorScheme, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, useColorScheme, Alert, Pressable } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { TextField } from '../../components/TextField';
@@ -8,9 +8,9 @@ import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/AuthContext';
 import Colors from '../../constants/Colors';
-import { Spacing, FontSize } from '../../constants/Spacing';
+import { Spacing, FontSize, BorderRadius } from '../../constants/Spacing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';    
+import { decode } from 'base64-arraybuffer';
 
 type DoctorRow = {
   id: string;
@@ -20,6 +20,8 @@ type DoctorRow = {
   photo_url: string | null;
   experience_years: number | null;
 };
+
+type Specialty = { id: string; name: string };
 
 export default function EditDoctorProfileScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -32,6 +34,8 @@ export default function EditDoctorProfileScreen() {
   const [qualifications, setQualifications] = useState('');
   const [experience, setExperience] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -54,6 +58,13 @@ export default function EditDoctorProfileScreen() {
       setQualifications(data.qualifications ?? '');
       setExperience(data.experience_years != null ? String(data.experience_years) : '');
       setPhotoUri(data.photo_url);
+
+      const [{ data: allSpecialties }, { data: myLinks }] = await Promise.all([
+        supabase.from('specialties').select('id, name').order('name'),
+        supabase.from('doctor_specialties').select('specialty_id').eq('doctor_id', data.id),
+      ]);
+      setSpecialties(allSpecialties ?? []);
+      setSelectedSpecialtyIds(new Set((myLinks ?? []).map((l) => l.specialty_id)));
     }
     setLoading(false);
   }, [profile]);
@@ -61,6 +72,18 @@ export default function EditDoctorProfileScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function toggleSpecialty(specialtyId: string) {
+    setSelectedSpecialtyIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(specialtyId)) {
+        next.delete(specialtyId);
+      } else {
+        next.add(specialtyId);
+      }
+      return next;
+    });
+  }
 
   async function handlePickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -73,7 +96,7 @@ export default function EditDoctorProfileScreen() {
       mediaTypes: ['images'],
       quality: 0.6,
       allowsEditing: true,
-      aspect: [1, 1],   
+      aspect: [1, 1],
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -132,6 +155,17 @@ export default function EditDoctorProfileScreen() {
 
       if (updateError) throw new Error(updateError.message);
 
+      // Replace this doctor's specialty links with exactly what's selected now.
+      await supabase.from('doctor_specialties').delete().eq('doctor_id', doctor.id);
+      if (selectedSpecialtyIds.size > 0) {
+        const rows = Array.from(selectedSpecialtyIds).map((specialty_id) => ({
+          doctor_id: doctor.id,
+          specialty_id,
+        }));
+        const { error: specialtyError } = await supabase.from('doctor_specialties').insert(rows);
+        if (specialtyError) throw new Error(specialtyError.message);
+      }
+
       Alert.alert('Saved', 'Your profile has been updated.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Something went wrong.');
@@ -187,6 +221,25 @@ export default function EditDoctorProfileScreen() {
         numberOfLines={4}
       />
 
+      <Text style={[styles.label, { color: colors.text }]}>Specialties</Text>
+      <View style={styles.chipRow}>
+        {specialties.map((s) => {
+          const active = selectedSpecialtyIds.has(s.id);
+          return (
+            <Pressable
+              key={s.id}
+              onPress={() => toggleSpecialty(s.id)}
+              style={[
+                styles.chip,
+                { backgroundColor: active ? colors.primary : colors.cardBackground, borderColor: colors.border },
+              ]}
+            >
+              <Text style={{ color: active ? '#FFFFFF' : colors.text }}>{s.name}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <View style={styles.buttonGroup}>
         <Button title="Save Changes" onPress={handleSave} variant="primary" loading={saving} />
       </View>
@@ -207,5 +260,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoInitial: { fontSize: FontSize.title, fontWeight: 'bold' },
+  label: { fontSize: FontSize.body, fontWeight: '600', marginBottom: Spacing.xs, marginTop: Spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1 },
   buttonGroup: { marginTop: Spacing.lg },
-});     
+});    

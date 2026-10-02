@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, useColorScheme, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, Image } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -28,7 +28,7 @@ type DoctorDetail = {
   doctor_specialties: { specialties: { name: string } | null }[];
   doctor_clinics: {
     id: string;
-    clinics: { name: string; address: string; locality: string | null; city: string; phone: string | null } | null;
+    clinics: { id: string; name: string; address: string; locality: string | null; city: string; phone: string | null } | null;
     clinic_sessions: Session[];
   }[];
 };
@@ -69,7 +69,7 @@ export default function DoctorProfileScreen() {
       .select(
         `id, display_name, bio, qualifications, photo_url, experience_years,
          doctor_specialties(specialties(name)),
-         doctor_clinics(id, clinics(name, address, locality, city, phone),
+         doctor_clinics(id, clinics(id, name, address, locality, city, phone),
            clinic_sessions(id, session_date, start_time, end_time, booking_mode, capacity, status))`
       )
       .eq('id', id)
@@ -144,16 +144,20 @@ export default function DoctorProfileScreen() {
         return (
           <View key={link.id}>
             {link.clinics ? (
-              <Card>
-                <Text style={[styles.clinicName, { color: colors.primary }]}>{link.clinics.name}</Text>
-                <Text style={[styles.detail, { color: colors.text }]}>
-                  {link.clinics.address}
-                  {link.clinics.locality ? `, ${link.clinics.locality}` : ''}, {link.clinics.city}
-                </Text>
-                {link.clinics.phone ? (
-                  <Text style={[styles.detail, { color: colors.textMuted }]}>Phone: {link.clinics.phone}</Text>
-                ) : null}
-              </Card>
+              <Pressable
+                onPress={() => router.push({ pathname: '/clinic/[id]', params: { id: link.clinics!.id } } as any)}
+              >
+                <Card>
+                  <Text style={[styles.clinicName, { color: colors.primary }]}>{link.clinics.name}</Text>
+                  <Text style={[styles.detail, { color: colors.text }]}>
+                    {link.clinics.address}
+                    {link.clinics.locality ? `, ${link.clinics.locality}` : ''}, {link.clinics.city}
+                  </Text>
+                  {link.clinics.phone ? (
+                    <Text style={[styles.detail, { color: colors.textMuted }]}>Phone: {link.clinics.phone}</Text>
+                  ) : null}
+                </Card>
+              </Pressable>
             ) : null}
 
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Available sessions</Text>
@@ -226,4 +230,4 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.md, marginBottom: Spacing.sm },
   sessionDate: { fontSize: FontSize.large, fontWeight: '600' },
   note: { fontSize: FontSize.small, marginTop: Spacing.sm },
-});  
+});   
