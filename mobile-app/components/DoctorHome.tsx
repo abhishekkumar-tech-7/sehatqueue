@@ -37,6 +37,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
 
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [bookedCounts, setBookedCounts] = useState<Record<string, number>>({});
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,12 +47,18 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
 
     const { data: doctorRow } = await supabase
       .from('doctors')
-      .select('id')
+      .select('id, verification_status')
       .eq('profile_id', profile.id)
       .single();
 
     if (!doctorRow) {
       setError('Doctor profile not found.');
+      setLoading(false);
+      return;
+    }
+    setVerificationStatus(doctorRow.verification_status);
+
+    if (doctorRow.verification_status !== 'APPROVED') {
       setLoading(false);
       return;
     }
@@ -113,6 +120,51 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
     );
   }
 
+  if (verificationStatus === 'PENDING') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Verification Pending</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Your account is awaiting review by an administrator. You'll be able to manage sessions
+          once your profile is approved.
+        </Text>
+        <View style={styles.buttonGroup}>
+          <Button
+            title="Refresh"
+            onPress={() => {
+              setLoading(true);
+              load();
+            }}
+            variant="secondary"
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (verificationStatus === 'REJECTED') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <Text style={[styles.title, { color: colors.error }]}>Verification Not Approved</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Your doctor account could not be verified. Please contact SehatQueue support for more
+          information.
+        </Text>
+      </View>
+    );
+  }
+
+  if (verificationStatus === 'SUSPENDED') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <Text style={[styles.title, { color: colors.error }]}>Account Suspended</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Your account has been suspended. Please contact SehatQueue support.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}
@@ -123,7 +175,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
     >
       <Text style={[styles.title, { color: colors.text }]}>Hello, {profile.full_name}</Text>
 
-      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}>  
+      <View style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}>
         <Button
           title="+ New Session"
           onPress={() => router.push('/doctor-portal/new-session' as any)}
@@ -166,9 +218,8 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
           </Pressable>
         ))
       )}
-
     </ScrollView>
-  );   
+  );
 }
 
 const styles = StyleSheet.create({
@@ -179,4 +230,4 @@ const styles = StyleSheet.create({
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   buttonGroup: { marginTop: Spacing.lg },
-});  
+});    
