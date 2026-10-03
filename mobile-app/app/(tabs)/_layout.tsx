@@ -34,48 +34,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="bookings"
         options={{
-          title: 'Search',
+          title: 'Bookings',
           tabBarIcon: ({ color }) => (
             <SymbolView
-              name={{
-                ios: 'magnifyingglass',
-                android: 'search',
-                web: 'search',
-              }}
+              name={{ ios: 'calendar', android: 'event', web: 'event' }}
               tintColor={color}
               size={26}
             />
           ),
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'person.fill', android: 'person', web: 'person'}}
-              tintColor={color}
-              size={26}
-            />  
-          ),
-        }}
-      /> 
-      <Tabs.Screen
-        name="bookings"
-        options={{
-          title: 'Bookings',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'calendar', android: 'event', web: 'event'}}
-              tintColor={color}
-              size={26}
-            />
-          ),
-        }} 
-      />  
       <Tabs.Screen
         name="notifications"
         options={{
@@ -89,6 +59,19 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'person.fill', android: 'person', web: 'person' }}
+              tintColor={color}
+              size={26}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
-}          
+}   
