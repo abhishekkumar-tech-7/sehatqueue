@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { TextField } from './TextField';
 import { Card } from './Card';
 import { LoadingView } from './StateViews';
@@ -45,6 +46,7 @@ function formatDateTime(iso: string) {
 export default function PatientHome({ profile }: { profile: Profile }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
+  const { t } = useTranslation();
 
   const [upcoming, setUpcoming] = useState<UpcomingBooking[]>([]);
   const [liveState, setLiveState] = useState<Record<string, SessionLiveState>>({});
@@ -79,8 +81,6 @@ export default function PatientHome({ profile }: { profile: Profile }) {
     setDoctors((doctorsResult.data as unknown as DoctorRow[]) ?? []);
     setSpecialties((specialtiesResult.data as Specialty[]) ?? []);
 
-    // Load the current live state for every session the patient has a
-    // TOKEN booking in, so we can show "Now serving #X" immediately.
     const tokenSessionIds = Array.from(
       new Set(bookings.filter((b) => b.booking_mode === 'TOKEN').map((b) => b.session_id))
     );
@@ -107,8 +107,6 @@ export default function PatientHome({ profile }: { profile: Profile }) {
     }, [load])
   );
 
-  // Subscribe to live updates for every session the patient has a token in,
-  // so "Now serving #X" updates instantly when the doctor calls next.
   useEffect(() => {
     const tokenSessionIds = Array.from(
       new Set(upcoming.filter((b) => b.booking_mode === 'TOKEN').map((b) => b.session_id))
@@ -152,7 +150,7 @@ export default function PatientHome({ profile }: { profile: Profile }) {
 
   const showSearchResults = query.trim().length > 0 || selectedSlug !== null;
 
-  if (loading) return <LoadingView message="Loading..." />;
+  if (loading) return <LoadingView message={t('common.loading')} />;
 
   return (
     <ScrollView
@@ -160,9 +158,14 @@ export default function PatientHome({ profile }: { profile: Profile }) {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={colors.primary} />}
     >
-      <Text style={[styles.title, { color: colors.text }]}>Hello, {profile.full_name}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('home.hello', { name: profile.full_name })}</Text>
 
-      <TextField label="Search doctors" placeholder="e.g. Sharma" value={query} onChangeText={setQuery} />
+      <TextField
+        label={t('home.searchLabel')}
+        placeholder={t('home.searchPlaceholder')}
+        value={query}
+        onChangeText={setQuery}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
         {[{ id: 'all', name: 'All', slug: null as string | null }, ...specialties].map((s) => {
@@ -184,12 +187,10 @@ export default function PatientHome({ profile }: { profile: Profile }) {
 
       {showSearchResults ? (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Search results</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('home.searchResults')}</Text>
           {filteredDoctors.length === 0 ? (
             <Card>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                No doctors found. Try a different name or specialty.
-              </Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('home.noResults')}</Text>
             </Card>
           ) : (
             filteredDoctors.map((item) => {
@@ -225,12 +226,10 @@ export default function PatientHome({ profile }: { profile: Profile }) {
         </>
       ) : (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your upcoming bookings</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('home.upcomingBookings')}</Text>
           {upcoming.length === 0 ? (
             <Card>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                You don't have any upcoming bookings yet. Search for a doctor above to get started.
-              </Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('home.noBookings')}</Text>
             </Card>
           ) : (
             upcoming.map((b) => {
@@ -246,10 +245,12 @@ export default function PatientHome({ profile }: { profile: Profile }) {
                     </Text>
                     {b.booking_mode === 'TOKEN' ? (
                       <>
-                        <Text style={[styles.detail, { color: colors.text }]}>Your token #{b.token_number}</Text>
+                        <Text style={[styles.detail, { color: colors.text }]}>
+                          {t('home.yourToken', { number: b.token_number })}
+                        </Text>
                         {live ? (
                           <Text style={[styles.liveStatus, { color: colors.success }]}>
-                            Now serving #{live.current_token > 0 ? live.current_token : '-'}
+                            {t('home.nowServing', { number: live.current_token > 0 ? live.current_token : '-' })}
                           </Text>
                         ) : null}
                       </>
