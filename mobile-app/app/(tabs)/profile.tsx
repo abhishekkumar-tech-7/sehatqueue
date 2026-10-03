@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useColorScheme, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { TextField } from '../../components/TextField';
 import { Button } from '../../components/Button';
 import { LoadingView } from '../../components/StateViews';
@@ -12,6 +13,7 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
   const { profile, loading, refreshProfile } = useAuth();
+  const { t } = useTranslation();
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -59,7 +61,7 @@ export default function ProfileScreen() {
     }
 
     await refreshProfile();
-    Alert.alert('Saved', 'Your profile has been updated.');
+    Alert.alert(t('profile.saved'), t('profile.savedMessage'));
   }
 
   return (
@@ -67,33 +69,33 @@ export default function ProfileScreen() {
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.container}
     >
-      <Text style={[styles.title, { color: colors.text }]}>My Profile</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
       <Text style={[styles.role, { color: colors.textMuted }]}>
         {profile.role.charAt(0) + profile.role.slice(1).toLowerCase()} account
       </Text>
 
-      <TextField label="Full Name" value={fullName} onChangeText={setFullName} error={errors.fullName} />
+      <TextField label={t('profile.fullName')} value={fullName} onChangeText={setFullName} error={errors.fullName} />
       <TextField
-        label="Phone Number"
+        label={t('profile.phone')}
         keyboardType="phone-pad"
         value={phone}
         onChangeText={setPhone}
         error={errors.phone}
       />
-      <TextField label="Email (cannot be changed)" value={profile.email ?? ''} editable={false} />
+      <TextField label={t('profile.email')} value={profile.email ?? ''} editable={false} />
 
-      <Text style={[styles.label, { color: colors.text }]}>Preferred Language</Text>
+      <Text style={[styles.label, { color: colors.text }]}>{t('profile.language')}</Text>
       <View style={styles.languageRow}>
         <View style={styles.languageButton}>
           <Button
-            title="English"
+            title={t('profile.english')}
             onPress={() => setLanguage('en')}
             variant={language === 'en' ? 'primary' : 'secondary'}
           />
         </View>
         <View style={styles.languageButton}>
           <Button
-            title="हिन्दी"
+            title={t('profile.hindi')}
             onPress={() => setLanguage('hi')}
             variant={language === 'hi' ? 'primary' : 'secondary'}
           />
@@ -101,9 +103,9 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.actions}>
-        <Button title="Save Changes" onPress={handleSave} variant="primary" loading={saving} />
+        <Button title={t('common.save')} onPress={handleSave} variant="primary" loading={saving} />
         <View style={{ height: Spacing.md }} />
-        <Button title="Log Out" onPress={() => supabase.auth.signOut()} variant="danger" />
+        <Button title={t('common.logOut')} onPress={() => supabase.auth.signOut()} variant="danger" />
       </View>
     </ScrollView>
   );

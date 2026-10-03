@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "logOut": "Log Out",
+    "retry": "Try Again",
+    "ok": "OK"
+  },
+  "home": {
+    "hello": "Hello, {{name}}",
+    "searchPlaceholder": "e.g. Sharma",
+    "searchLabel": "Search doctors",
+    "searchResults": "Search results",
+    "noResults": "No doctors found. Try a different name or specialty.",
+    "upcomingBookings": "Your upcoming bookings",
+    "noBookings": "You don't have any upcoming bookings yet. Search for a doctor above to get started.",
+    "yourToken": "Your token #{{number}}",
+    "nowServing": "Now serving #{{number}}"
+  },
+  "bookings": {
+    "title": "My Bookings",
+    "noBookings": "No bookings yet",
+    "noBookingsMessage": "Bookings you make will show up here.",
+    "token": "Token #{{number}}",
+    "cancelBooking": "Cancel Booking",
+    "cancelConfirmTitle": "Cancel booking?",
+    "cancelConfirmMessage": "This will free up your spot for someone else.",
+    "keepBooking": "Keep booking",
+    "reference": "Ref: {{ref}}"
+  },
+  "profile": {
+    "title": "My Profile",
+    "fullName": "Full Name",
+    "phone": "Phone Number",
+    "email": "Email (cannot be changed)",
+    "language": "Preferred Language",
+    "english": "English",
+    "hindi": "हिन्दी",
+    "saved": "Saved",
+    "savedMessage": "Your profile has been updated."
+  },
+  "alerts": {
+    "title": "Notifications",
+    "noNotifications": "No notifications",
+    "noNotificationsMessage": "Updates about your bookings will appear here."
+  },
+  "booking": {
+    "chooseTokens": "Choose Tokens",
+    "chooseTime": "Choose a Time",
+    "selectUpTo": "Select up to {{max}} tokens (e.g. for family members). Times shown are estimates, not guaranteed.",
+    "selectSlot": "Select an available 15-minute slot",
+    "bookNTokens": "Book {{count}} Token",
+    "bookNTokens_plural": "Book {{count}} Tokens",
+    "tokensBooked": "Tokens booked",
+    "appointmentBooked": "Appointment booked",
+    "booked": "Booked",
+    "noSlotsToday": "No remaining time slots for this session today."
+  }
+}  

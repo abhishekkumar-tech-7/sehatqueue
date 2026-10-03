@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "save": "बदलाव सहेजें",
+    "cancel": "रद्द करें",
+    "logOut": "लॉग आउट",
+    "retry": "फिर से कोशिश करें",
+    "ok": "ठीक है"
+  },
+  "home": {
+    "hello": "नमस्ते, {{name}}",
+    "searchPlaceholder": "जैसे शर्मा",
+    "searchLabel": "डॉक्टर खोजें",
+    "searchResults": "खोज परिणाम",
+    "noResults": "कोई डॉक्टर नहीं मिला। कोई और नाम या विशेषज्ञता आज़माएं।",
+    "upcomingBookings": "आपकी आगामी बुकिंग",
+    "noBookings": "अभी आपकी कोई बुकिंग नहीं है। शुरू करने के लिए ऊपर डॉक्टर खोजें।",
+    "yourToken": "आपका टोकन #{{number}}",
+    "nowServing": "अभी टोकन #{{number}} चल रहा है"
+  },
+  "bookings": {
+    "title": "मेरी बुकिंग",
+    "noBookings": "अभी कोई बुकिंग नहीं",
+    "noBookingsMessage": "आपकी बुकिंग यहाँ दिखेगी।",
+    "token": "टोकन #{{number}}",
+    "cancelBooking": "बुकिंग रद्द करें",
+    "cancelConfirmTitle": "बुकिंग रद्द करें?",
+    "cancelConfirmMessage": "इससे आपकी जगह किसी और के लिए खुल जाएगी।",
+    "keepBooking": "बुकिंग रखें",
+    "reference": "संदर्भ: {{ref}}"
+  },
+  "profile": {
+    "title": "मेरी प्रोफ़ाइल",
+    "fullName": "पूरा नाम",
+    "phone": "फ़ोन नंबर",
+    "email": "ईमेल (बदला नहीं जा सकता)",
+    "language": "पसंदीदा भाषा",
+    "english": "English",
+    "hindi": "हिन्दी",
+    "saved": "सहेजा गया",
+    "savedMessage": "आपकी प्रोफ़ाइल अपडेट हो गई है।"
+  },
+  "alerts": {
+    "title": "सूचनाएं",
+    "noNotifications": "कोई सूचना नहीं",
+    "noNotificationsMessage": "आपकी बुकिंग से जुड़ी जानकारी यहाँ दिखेगी।"
+  },
+  "booking": {
+    "chooseTokens": "टोकन चुनें",
+    "chooseTime": "समय चुनें",
+    "selectUpTo": "{{max}} तक टोकन चुनें (जैसे परिवार के सदस्यों के लिए)। दिखाया गया समय अनुमानित है, निश्चित नहीं।",
+    "selectSlot": "उपलब्ध 15 मिनट का समय चुनें",
+    "bookNTokens": "{{count}} टोकन बुक करें",
+    "bookNTokens_plural": "{{count}} टोकन बुक करें",
+    "tokensBooked": "टोकन बुक हो गए",
+    "appointmentBooked": "अपॉइंटमेंट बुक हो गई",
+    "booked": "बुक हो चुका",
+    "noSlotsToday": "आज इस सत्र के लिए कोई समय शेष नहीं है।"
+  }
+}  

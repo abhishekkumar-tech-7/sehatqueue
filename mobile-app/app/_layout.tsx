@@ -5,6 +5,8 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import '../lib/i18n';
+import i18n from '../lib/i18n';
 
 import { useColorScheme } from '@/components/useColorScheme';
 
@@ -50,7 +52,7 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { session, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -63,6 +65,12 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     }
   },[session, loading, segments]);
+
+  useEffect(() => {
+    if (profile?.preferred_language) {
+      i18n.changeLanguage(profile.preferred_language);
+    }
+  }, [profile?.preferred_language]);   
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
