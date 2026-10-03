@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, useColorScheme, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { LoadingView, EmptyView, ErrorView } from '../../components/StateViews';
@@ -47,6 +48,7 @@ export default function BookingsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
   const { profile } = useAuth();
+  const { t } = useTranslation();
 
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,10 +83,10 @@ export default function BookingsScreen() {
   }, [load]);
 
   function handleCancel(booking: BookingRow) {
-    Alert.alert('Cancel booking?', 'This will free up your spot for someone else.', [
-      { text: 'Keep booking', style: 'cancel' },
+    Alert.alert(t('bookings.cancelConfirmTitle'), t('bookings.cancelConfirmMessage'), [
+      { text: t('bookings.keepBooking'), style: 'cancel' },
       {
-        text: 'Cancel booking',
+        text: t('bookings.cancelBooking'),
         style: 'destructive',
         onPress: async () => {
           setCancellingId(booking.id);
@@ -129,7 +131,7 @@ export default function BookingsScreen() {
           load();
         }}
         ListEmptyComponent={
-          <EmptyView title="No bookings yet" message="Bookings you make will show up here." />
+          <EmptyView title={t('bookings.noBookings')} message={t('bookings.noBookingsMessage')} />
         }
         renderItem={({ item }) => {
           const doctorName = item.doctor_clinics?.doctors?.display_name ?? 'Doctor';
@@ -146,7 +148,7 @@ export default function BookingsScreen() {
               {item.booking_mode === 'TOKEN' ? (
                 <>
                   <Text style={[styles.tokenNumber, { color: colors.primary }]}>
-                    Token #{item.token_number}
+                    {t('bookings.token', { number: item.token_number })}
                   </Text>
                   {item.clinic_sessions ? (
                     <Text style={[styles.detail, { color: colors.textMuted }]}>
@@ -165,12 +167,14 @@ export default function BookingsScreen() {
               <Text style={[styles.status, { color: colors[STATUS_COLORS[item.status] ?? 'text'] }]}>
                 {item.status}
               </Text>
-              <Text style={[styles.reference, { color: colors.textMuted }]}>Ref: {item.booking_reference}</Text>
+              <Text style={[styles.reference, { color: colors.textMuted }]}>
+                {t('bookings.reference', { ref: item.booking_reference })}
+              </Text>
 
               {canCancel && (
                 <View style={{ marginTop: Spacing.sm }}>
                   <Button
-                    title="Cancel Booking"
+                    title={t('bookings.cancelBooking')}
                     onPress={() => handleCancel(item)}
                     variant="danger"
                     loading={cancellingId === item.id}

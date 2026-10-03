@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, useColorScheme } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/Card';
 import { LoadingView, ErrorView, EmptyView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
@@ -30,6 +31,7 @@ export default function NotificationsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
   const { profile } = useAuth();
+  const { t } = useTranslation();
 
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +85,9 @@ export default function NotificationsScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<EmptyView title="No notifications" message="Updates about your bookings will appear here." />}
+        ListEmptyComponent={
+          <EmptyView title={t('alerts.noNotifications')} message={t('alerts.noNotificationsMessage')} />
+        }
         renderItem={({ item }) => (
           <Card
             onTouchStart={() => {
