@@ -6,6 +6,7 @@ import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import Colors from '../../constants/Colors';
 import { Spacing, FontSize } from '../../constants/Spacing';
+import { ClinicMap } from '../../components/ClinicMap';    
 
 type ClinicDetail = {
   id: string;
@@ -15,6 +16,8 @@ type ClinicDetail = {
   city: string;
   state: string;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   doctor_clinics: {
     relationship_status: string;
     doctors: {
@@ -41,7 +44,7 @@ export default function ClinicProfileScreen() {
     const { data, error: queryError } = await supabase
       .from('clinics')
       .select(
-        `id, name, address, locality, city, state, phone,
+        `id, name, address, locality, city, state, phone, latitude, longitude, 
          doctor_clinics(relationship_status,
            doctors(id, display_name, qualifications, verification_status,
              doctor_specialties(specialties(name))))`
@@ -91,6 +94,14 @@ export default function ClinicProfileScreen() {
         <Text style={[styles.detail, { color: colors.textMuted }]}>Phone: {clinic.phone}</Text>
       ) : null}
 
+      <View style={{ marginTop: Spacing.sm }}>
+        <ClinicMap
+          latitude={clinic.latitude}
+          longitude={clinic.longitude}
+          address={`${clinic.address}${clinic.locality ? ', ' + clinic.locality : ''}, ${clinic.city}, ${clinic.state}`}
+        />
+      </View>   
+
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Doctors at this clinic</Text>
 
       {approvedDoctors.length === 0 ? (
@@ -129,5 +140,5 @@ const styles = StyleSheet.create({
   name: { fontSize: FontSize.title, fontWeight: 'bold' },
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.lg, marginBottom: Spacing.sm },
-  doctorName: { fontSize: FontSize.heading, fontWeight: '600' },
+  doctorName: { fontSize: FontSize.heading, fontWeight: '600' },   
 });  

@@ -86,7 +86,8 @@ function RootLayoutNav() {
         <Stack.Screen name="doctor-portal/edit-profile" options={{ headerShown: true }} />
         <Stack.Screen name="clinic/[id]" options={{ headerShown: true }} />
         <Stack.Screen name="doctor-portal/add-receptionist" options={{ headerShown: true }} />
+        <Stack.Screen name="doctor-portal/edit-clinic" options={{ headerShown: true }} />
       </Stack>  
-    </ThemeProvider>      
+    </ThemeProvider>           
   );  
 }   

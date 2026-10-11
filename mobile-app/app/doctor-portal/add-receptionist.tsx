@@ -11,17 +11,18 @@ export default function AddReceptionistScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleAdd() {
-    if (!email.includes('@')) {
-      Alert.alert('Invalid email', 'Enter a valid email address.');
+    const value = identifier.trim();
+    if (value.length < 5) {
+      Alert.alert('Invalid entry', 'Enter their email or 10-digit mobile number.');
       return;
     }
 
     setSaving(true);
-    const { error } = await supabase.rpc('add_receptionist', { p_email: email.trim() });
+    const { error } = await supabase.rpc('add_receptionist', { p_identifier: value });
     setSaving(false);
 
     if (error) {
@@ -29,25 +30,28 @@ export default function AddReceptionistScreen() {
       return;
     }
 
-    Alert.alert('Receptionist added', `${email.trim()} can now manage your clinic's queue.`, [
+    Alert.alert('Receptionist added', `${value} can now manage your clinic's queue.`, [
       { text: 'OK', onPress: () => router.back() },
     ]);
   }
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <Stack.Screen options={{ title: 'Add Receptionist' }} />
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        Enter the email of a person who has already registered as a patient. They'll be able to log
-        in and manage your clinic's queue.
+        Enter the email or 10-digit mobile number of a person who has already registered. They'll be
+        able to log in and manage your clinic's queue.
       </Text>
       <TextField
-        label="Email"
-        placeholder="receptionist@example.com"
-        keyboardType="email-address"
+        label="Email or mobile number"
+        placeholder="receptionist@example.com or 9876543210"
         autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
+        value={identifier}
+        onChangeText={setIdentifier}
       />
       <View style={styles.buttonGroup}>
         <Button title="Add Receptionist" onPress={handleAdd} variant="primary" loading={saving} />
@@ -60,4 +64,4 @@ const styles = StyleSheet.create({
   container: { padding: Spacing.lg, paddingBottom: Spacing.xxl },
   subtitle: { fontSize: FontSize.body, marginBottom: Spacing.lg },
   buttonGroup: { marginTop: Spacing.lg },
-}); 
+});   

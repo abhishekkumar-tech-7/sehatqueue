@@ -1,0 +1,1 @@
+alter type booking_status add value if not exists 'ON_HOLD';  

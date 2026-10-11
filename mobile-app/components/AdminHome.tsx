@@ -1,46 +1,60 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, useColorScheme, Alert } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, useColorScheme, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Card } from './Card';
 import { Button } from './Button';
 import { LoadingView, ErrorView, EmptyView } from './StateViews';
+import AdminReports from './AdminReports';
+import AdminAuditLog from './AdminAuditLog';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../lib/AuthContext';
 import Colors from '../constants/Colors';
-import { Spacing, FontSize } from '../constants/Spacing';
+import { Spacing, FontSize, BorderRadius } from '../constants/Spacing';
+
+type Section = 'approvals' | 'reports' | 'audit';
+
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: 'approvals', label: 'Approvals' },
+  { key: 'reports', label: 'Reports' },
+  { key: 'audit', label: 'Audit Log' },
+];
 
 type PendingDoctor = {
-  id: string;
-  display_name: string;
-  qualifications: string | null;
-  bio: string | null;
-  verification_status: string;
-  profiles: { email: string | null; phone: string | null } | null;
+  doctor_id: string;
+  doctor_name: string;
+  doctor_qualifications: string | null;
+  doctor_bio: string | null;
+  doctor_email: string | null;
+  doctor_phone: string | null;
+  registered_at: string;
 };
 
-export default function AdminHome({ profile }: { profile: Profile }) {
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function ApprovalsSection() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
 
   const [doctors, setDoctors] = useState<PendingDoctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error: queryError } = await supabase
-      .from('doctors')
-      .select('id, display_name, qualifications, bio, verification_status, profiles(email, phone)')
-      .eq('verification_status', 'PENDING')
-      .order('created_at');
+    const { data, error: rpcError } = await supabase.rpc('admin_get_pending_doctors');
 
-    if (queryError) {
+    if (rpcError) {
+      console.log('Pending doctors error:', rpcError.message);
       setError('Could not load pending doctors.');
     } else {
-      setDoctors(data as unknown as PendingDoctor[]);
+      setDoctors((data as PendingDoctor[]) ?? []);
     }
     setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useFocusEffect(
@@ -79,66 +93,119 @@ export default function AdminHome({ profile }: { profile: Profile }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Admin Dashboard</Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>Pending doctor approvals</Text>
+    <FlatList
+      data={doctors}
+      keyExtractor={(item) => item.doctor_id}
+      contentContainerStyle={styles.list}
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        load();
+      }}
+      ListEmptyComponent={
+        <EmptyView title="Nothing pending" message="No doctor registrations are waiting for review." />
+      }
+      renderItem={({ item }) => (
+        <Card>
+          <Text style={[styles.name, { color: colors.text }]}>{item.doctor_name}</Text>
+          {item.doctor_qualifications ? (
+            <Text style={[styles.detail, { color: colors.textMuted }]}>{item.doctor_qualifications}</Text>
+          ) : null}
+          {item.doctor_email ? (
+            <Text style={[styles.detail, { color: colors.text }]}>Email: {item.doctor_email}</Text>
+          ) : null}
+          {item.doctor_phone ? (
+            <Text style={[styles.detail, { color: colors.text }]}>Phone: {item.doctor_phone}</Text>
+          ) : null}
+          {item.doctor_bio ? (
+            <Text style={[styles.detail, { color: colors.text }]}>{item.doctor_bio}</Text>
+          ) : null}
+          <Text style={[styles.detail, { color: colors.textMuted }]}>
+            Registered {formatDate(item.registered_at)}
+          </Text>
 
-      <FlatList
-        data={doctors}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={<EmptyView title="Nothing pending" message="No doctor registrations are waiting for review." />}
-        renderItem={({ item }) => (
-          <Card>
-            <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
-            {item.qualifications ? (
-              <Text style={[styles.detail, { color: colors.textMuted }]}>{item.qualifications}</Text>
-            ) : null}
-            {item.profiles?.email ? (
-              <Text style={[styles.detail, { color: colors.textMuted }]}>{item.profiles.email}</Text>
-            ) : null}
-            {item.profiles?.phone ? (
-              <Text style={[styles.detail, { color: colors.textMuted }]}>{item.profiles.phone}</Text>
-            ) : null}
-            {item.bio ? <Text style={[styles.detail, { color: colors.text }]}>{item.bio}</Text> : null}
-
-            <View style={styles.actionRow}>
-              <View style={styles.actionButton}>
-                <Button
-                  title="Approve"
-                  onPress={() => handleDecision(item.id, 'APPROVED')}
-                  variant="primary"
-                  loading={actioningId === item.id}
-                />
-              </View>
-              <View style={styles.actionButton}>
-                <Button
-                  title="Reject"
-                  onPress={() => handleDecision(item.id, 'REJECTED')}
-                  variant="danger"
-                  loading={actioningId === item.id}
-                />
-              </View>
+          <View style={styles.actionRow}>
+            <View style={styles.actionButton}>
+              <Button
+                title="Approve"
+                onPress={() => handleDecision(item.doctor_id, 'APPROVED')}
+                variant="primary"
+                loading={actioningId === item.doctor_id}
+                disabled={actioningId !== null}
+              />
             </View>
-          </Card>
-        )}
-      />
+            <View style={styles.actionButton}>
+              <Button
+                title="Reject"
+                onPress={() => handleDecision(item.doctor_id, 'REJECTED')}
+                variant="danger"
+                loading={actioningId === item.doctor_id}
+                disabled={actioningId !== null}
+              />
+            </View>
+          </View>
+        </Card>
+      )}
+    />
+  );
+}
 
-      <View style={styles.buttonGroup}>
-        <Button title="Log Out" onPress={() => supabase.auth.signOut()} variant="secondary" />
+export default function AdminHome({ profile }: { profile: Profile }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme as 'light' | 'dark'];
+  const [section, setSection] = useState<Section>('approvals');
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.text }]}>Admin Dashboard</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>{profile.full_name}</Text>
+
+        <View style={styles.switchRow}>
+          {SECTIONS.map((s) => {
+            const active = section === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                onPress={() => setSection(s.key)}
+                style={[
+                  styles.switchChip,
+                  { backgroundColor: active ? colors.primary : colors.cardBackground, borderColor: colors.border },
+                ]}
+              >
+                <Text style={{ color: active ? '#FFFFFF' : colors.text, fontWeight: '600' }}>{s.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={{ flex: 1 }}>
+        {section === 'approvals' && <ApprovalsSection />}
+        {section === 'reports' && <AdminReports />}
+        {section === 'audit' && <AdminAuditLog />}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: Spacing.lg },
+  container: { flex: 1 },
+  header: { padding: Spacing.lg, paddingBottom: Spacing.sm },
   title: { fontSize: FontSize.title, fontWeight: 'bold' },
-  subtitle: { fontSize: FontSize.body, marginTop: Spacing.xs, marginBottom: Spacing.md, color: '#6B7280' },
-  list: { paddingBottom: Spacing.md },
+  subtitle: { fontSize: FontSize.body, marginTop: Spacing.xs, marginBottom: Spacing.md },
+  switchRow: { flexDirection: 'row', gap: Spacing.sm },
+  switchChip: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },
   name: { fontSize: FontSize.heading, fontWeight: '600' },
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   actionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   actionButton: { flex: 1 },
-  buttonGroup: { marginTop: Spacing.md },
-});  
+});   

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -82,7 +82,6 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
     const sessionList = data as unknown as SessionRow[];
     setSessions(sessionList);
 
-    // Get a booked count per session for the "X / capacity" display.
     if (sessionList.length > 0) {
       const { data: bookingCounts } = await supabase
         .from('bookings')
@@ -147,7 +146,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
         <Text style={[styles.title, { color: colors.error }]}>Verification Not Approved</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Your doctor account could not be verified. Please contact SehatQueue support for more
+          Your doctor account could not be verified. Please contact DocNum support for more
           information.
         </Text>
       </View>
@@ -159,7 +158,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
         <Text style={[styles.title, { color: colors.error }]}>Account Suspended</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Your account has been suspended. Please contact SehatQueue support.
+          Your account has been suspended. Please contact DocNum support.
         </Text>
       </View>
     );
@@ -185,6 +184,12 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
         <Button
           title="Edit My Profile"
           onPress={() => router.push('/doctor-portal/edit-profile' as any)}
+          variant="secondary"
+        />
+        <View style={{ height: Spacing.sm }} />
+        <Button
+          title="Edit Clinic Address"
+          onPress={() => router.push('/doctor-portal/edit-clinic' as any)}
           variant="secondary"
         />
         <View style={{ height: Spacing.sm }} />
@@ -221,7 +226,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
               </Text>
               <Text style={[styles.status, { color: colors.warning }]}>{s.status}</Text>
             </Card>
-          </Pressable>   
+          </Pressable>
         ))
       )}
     </ScrollView>
@@ -236,4 +241,4 @@ const styles = StyleSheet.create({
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   buttonGroup: { marginTop: Spacing.lg },
-});    
+});   

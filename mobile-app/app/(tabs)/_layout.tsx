@@ -4,9 +4,12 @@ import { Tabs } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { profile } = useAuth();
+  const isDoctor = profile?.role === 'DOCTOR';
 
   return (
     <Tabs
@@ -37,9 +40,25 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: 'Bookings',
+          // Doctors get the Report tab instead of Bookings.
+          href: isDoctor ? null : undefined,
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'calendar', android: 'event', web: 'event' }}
+              tintColor={color}
+              size={26}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="report"
+        options={{
+          title: 'Report',
+          href: isDoctor ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
               tintColor={color}
               size={26}
             />

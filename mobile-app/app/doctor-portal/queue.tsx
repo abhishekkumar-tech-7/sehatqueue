@@ -12,6 +12,8 @@ type BookingRow = {
   id: string;
   token_number: number | null;
   appointment_start: string | null;
+  patient_name: string | null;
+  patient_age: number | null;
   status: string;
   profiles: { full_name: string; phone: string | null } | null;
 };
@@ -23,6 +25,8 @@ type SessionInfo = {
   booking_mode: 'TOKEN' | 'SLOT';
   status: string;
 };
+
+type QueueAction = 'COMPLETED' | 'ON_HOLD' | 'SKIPPED';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -37,7 +41,7 @@ export default function QueueScreen() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actioningId, setActioningId] = useState<string | null>(null);
+  const [actioning, setActioning] = useState<string | null>(null);
   const [callingNext, setCallingNext] = useState(false);
 
   const load = useCallback(async () => {
@@ -50,7 +54,7 @@ export default function QueueScreen() {
         .single(),
       supabase
         .from('bookings')
-        .select('id, token_number, appointment_start, status, profiles(full_name, phone)')
+        .select('id, token_number, appointment_start, patient_name, patient_age, status, profiles(full_name, phone)')
         .eq('session_id', sessionId)
         .neq('status', 'CANCELLED')
         .order('token_number', { ascending: true, nullsFirst: false })
@@ -86,7 +90,7 @@ export default function QueueScreen() {
     load();
   }
 
-  async function handleStatusChange(newStatus: 'OPEN' | 'PAUSED' | 'CLOSED') {
+  async function handleSessionStatus(newStatus: 'OPEN' | 'PAUSED' | 'CLOSED') {
     const { error: statusError } = await supabase.rpc('update_session_status', {
       p_session_id: sessionId,
       p_new_status: newStatus,
@@ -99,13 +103,13 @@ export default function QueueScreen() {
     load();
   }
 
-  async function handleStatusUpdate(bookingId: string, status: 'COMPLETED' | 'NO_SHOW' | 'SKIPPED') {
-    setActioningId(bookingId);
+  async function handleBookingAction(bookingId: string, action: QueueAction) {
+    setActioning(`${bookingId}:${action}`);
     const { error: updateError } = await supabase.rpc('update_booking_status', {
       p_booking_id: bookingId,
-      p_new_status: status,
+      p_new_status: action,
     });
-    setActioningId(null);
+    setActioning(null);
 
     if (updateError) {
       Alert.alert('Could not update', updateError.message);
@@ -139,17 +143,17 @@ export default function QueueScreen() {
         <View style={styles.actionRow}>
           {session.status === 'OPEN' && (
             <View style={styles.actionButton}>
-              <Button title="Pause" onPress={() => handleStatusChange('PAUSED')} variant="secondary" />
+              <Button title="Pause" onPress={() => handleSessionStatus('PAUSED')} variant="secondary" />
             </View>
           )}
           {session.status === 'PAUSED' && (
             <View style={styles.actionButton}>
-              <Button title="Resume" onPress={() => handleStatusChange('OPEN')} variant="primary" />
+              <Button title="Resume" onPress={() => handleSessionStatus('OPEN')} variant="primary" />
             </View>
           )}
           {(session.status === 'OPEN' || session.status === 'PAUSED') && (
             <View style={styles.actionButton}>
-              <Button title="Close Session" onPress={() => handleStatusChange('CLOSED')} variant="danger" />
+              <Button title="Close Session" onPress={() => handleSessionStatus('CLOSED')} variant="danger" />
             </View>
           )}
         </View>
@@ -178,51 +182,62 @@ export default function QueueScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<EmptyView title="No patients yet" message="Bookings for this session will appear here." />}
-        renderItem={({ item }) => (
-          <Card>
-            <Text style={[styles.patientName, { color: colors.text }]}>
-              {item.profiles?.full_name ?? 'Patient'}
-            </Text>
-            {item.profiles?.phone ? (
-              <Text style={[styles.detail, { color: colors.textMuted }]}>{item.profiles.phone}</Text>
-            ) : null}
-            {item.token_number != null ? (
-              <Text style={[styles.detail, { color: colors.text }]}>Token #{item.token_number}</Text>
-            ) : item.appointment_start ? (
-              <Text style={[styles.detail, { color: colors.text }]}>{formatTime(item.appointment_start)}</Text>
-            ) : null}
-            <Text style={[styles.status, { color: colors.warning }]}>{item.status}</Text>
+        renderItem={({ item }) => {
+          const displayName = item.patient_name ?? item.profiles?.full_name ?? 'Patient';
+          const canAct = item.status === 'CONFIRMED' || item.status === 'ON_HOLD';
 
-            {item.status === 'CONFIRMED' && (
-              <View style={styles.actionRow}>
-                <View style={styles.actionButton}>
-                  <Button
-                    title="Completed"
-                    onPress={() => handleStatusUpdate(item.id, 'COMPLETED')}
-                    variant="primary"
-                    loading={actioningId === item.id}
-                  />
+          return (
+            <Card>
+              <Text style={[styles.patientName, { color: colors.text }]}>
+                {displayName}
+                {item.patient_age != null ? `, ${item.patient_age} yrs` : ''}
+              </Text>
+              {item.profiles?.phone ? (
+                <Text style={[styles.detail, { color: colors.textMuted }]}>{item.profiles.phone}</Text>
+              ) : null}
+              {item.token_number != null ? (
+                <Text style={[styles.detail, { color: colors.text }]}>Token #{item.token_number}</Text>
+              ) : item.appointment_start ? (
+                <Text style={[styles.detail, { color: colors.text }]}>{formatTime(item.appointment_start)}</Text>
+              ) : null}
+              <Text style={[styles.status, { color: colors.warning }]}>{item.status.replace('_', ' ')}</Text>
+
+              {canAct && (
+                <View style={styles.actionRow}>
+                  <View style={styles.actionButton}>
+                    <Button
+                      title="Completed"
+                      onPress={() => handleBookingAction(item.id, 'COMPLETED')}
+                      variant="primary"
+                      loading={actioning === `${item.id}:COMPLETED`}
+                      disabled={actioning !== null}
+                    />
+                  </View>
+                  {item.status === 'CONFIRMED' && (
+                    <View style={styles.actionButton}>
+                      <Button
+                        title="Hold"
+                        onPress={() => handleBookingAction(item.id, 'ON_HOLD')}
+                        variant="secondary"
+                        loading={actioning === `${item.id}:ON_HOLD`}
+                        disabled={actioning !== null}
+                      />
+                    </View>
+                  )}
+                  <View style={styles.actionButton}>
+                    <Button
+                      title="Skip"
+                      onPress={() => handleBookingAction(item.id, 'SKIPPED')}
+                      variant="secondary"
+                      loading={actioning === `${item.id}:SKIPPED`}
+                      disabled={actioning !== null}
+                    />
+                  </View>
                 </View>
-                <View style={styles.actionButton}>
-                  <Button
-                    title="No-show"
-                    onPress={() => handleStatusUpdate(item.id, 'NO_SHOW')}
-                    variant="danger"
-                    loading={actioningId === item.id}
-                  />
-                </View>
-                <View style={styles.actionButton}>
-                  <Button
-                    title="Skip"
-                    onPress={() => handleStatusUpdate(item.id, 'SKIPPED')}
-                    variant="secondary"
-                    loading={actioningId === item.id}
-                  />
-                </View>
-              </View>
-            )}
-          </Card>
-        )}
+              )}
+            </Card>
+          );
+        }}
       />
     </View>
   );
@@ -238,4 +253,4 @@ const styles = StyleSheet.create({
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   actionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   actionButton: { flex: 1 },
-});  
+});      

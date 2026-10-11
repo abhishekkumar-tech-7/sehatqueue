@@ -10,7 +10,7 @@ export default function ChooseRoleScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Join SehatQueue</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Join DocNum</Text>
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Are you a patient looking for care, or a doctor joining our platform?
       </Text>

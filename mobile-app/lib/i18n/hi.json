@@ -10,7 +10,7 @@
   "home": {
     "hello": "नमस्ते, {{name}}",
     "searchPlaceholder": "जैसे शर्मा",
-    "searchLabel": "डॉक्टर खोजें",
+    "searchLabel": "डॉक्टर या क्लिनिक का नाम खोजें", 
     "searchResults": "खोज परिणाम",
     "noResults": "कोई डॉक्टर नहीं मिला। कोई और नाम या विशेषज्ञता आज़माएं।",
     "upcomingBookings": "आपकी आगामी बुकिंग",

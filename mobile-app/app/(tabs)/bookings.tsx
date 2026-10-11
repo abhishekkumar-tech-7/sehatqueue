@@ -13,7 +13,9 @@ type BookingRow = {
   id: string;
   booking_mode: 'TOKEN' | 'SLOT';
   token_number: number | null;
-  appointment_start: string | null;
+  patient_name: string | null;
+  patient_age: number | null;
+  appointment_start: string | null;   
   status: string;
   booking_reference: string;
   clinic_sessions: { session_date: string; start_time: string; end_time: string } | null;
@@ -42,6 +44,7 @@ const STATUS_COLORS: Record<string, 'text' | 'success' | 'error' | 'warning' | '
   SKIPPED: 'warning',
   EXPIRED: 'textMuted',
   PENDING: 'warning',
+  ON_HOLD: 'warning',  
 };
 
 export default function BookingsScreen() {
@@ -62,7 +65,7 @@ export default function BookingsScreen() {
     const { data, error: queryError } = await supabase
       .from('bookings')
       .select(
-        `id, booking_mode, token_number, appointment_start, status, booking_reference,
+        `id, booking_mode, token_number,patient_name, patient_age, appointment_start, status, booking_reference,
          clinic_sessions(session_date, start_time, end_time),
          doctor_clinics(doctors(display_name), clinics(name))`
       )
@@ -157,7 +160,7 @@ export default function BookingsScreen() {
                   ) : null}
                 </>
               ) : (
-                item.appointment_start && (
+                item.appointment_start && (   
                   <Text style={[styles.detail, { color: colors.text }]}>
                     {formatDateTime(item.appointment_start)}
                   </Text>
@@ -165,7 +168,7 @@ export default function BookingsScreen() {
               )}
 
               <Text style={[styles.status, { color: colors[STATUS_COLORS[item.status] ?? 'text'] }]}>
-                {item.status}
+                {item.status.replace('_', ' ')}
               </Text>
               <Text style={[styles.reference, { color: colors.textMuted }]}>
                 {t('bookings.reference', { ref: item.booking_reference })}

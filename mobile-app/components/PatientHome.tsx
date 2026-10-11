@@ -65,7 +65,7 @@ export default function PatientHome({ profile }: { profile: Profile }) {
            doctor_clinics(doctors(display_name), clinics(name))`
         )
         .eq('patient_id', profile.id)
-        .eq('status', 'CONFIRMED')
+        .in('status', ['CONFIRMED', 'ON_HOLD'])    
         .order('created_at', { ascending: false }),
       supabase
         .from('doctors')
@@ -141,7 +141,11 @@ export default function PatientHome({ profile }: { profile: Profile }) {
   const filteredDoctors = useMemo(() => {
     const text = query.trim().toLowerCase();
     return doctors.filter((d) => {
-      const matchesText = !text || d.display_name.toLowerCase().includes(text);
+      const matchesName = d.display_name.toLowerCase().includes(text);
+      const matchesClinic = d.doctor_clinics.some((link) =>
+        link.clinics?.name.toLowerCase().includes(text)
+      );
+      const matchesText = !text || matchesName || matchesClinic;
       const matchesSpecialty =
         !selectedSlug || d.doctor_specialties.some((s) => s.specialties?.slug === selectedSlug);
       return matchesText && matchesSpecialty;
@@ -164,8 +168,8 @@ export default function PatientHome({ profile }: { profile: Profile }) {
         label={t('home.searchLabel')}
         placeholder={t('home.searchPlaceholder')}
         value={query}
-        onChangeText={setQuery}
-      />
+        onChangeText={setQuery} 
+      />   
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
         {[{ id: 'all', name: 'All', slug: null as string | null }, ...specialties].map((s) => {

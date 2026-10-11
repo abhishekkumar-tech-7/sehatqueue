@@ -10,7 +10,7 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>SehatQueue</Text>
+      <Text style={[styles.title, { color: colors.text }]}>DocNum</Text>
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Book your doctor's appointment or clinic token from home
       </Text>

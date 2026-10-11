@@ -10,7 +10,7 @@
   "home": {
     "hello": "Hello, {{name}}",
     "searchPlaceholder": "e.g. Sharma",
-    "searchLabel": "Search doctors",
+    "searchLabel": "Search by doctors or clinic name", 
     "searchResults": "Search results",
     "noResults": "No doctors found. Try a different name or specialty.",
     "upcomingBookings": "Your upcoming bookings",

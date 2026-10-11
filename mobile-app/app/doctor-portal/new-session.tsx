@@ -6,7 +6,7 @@ import { Button } from '../../components/Button';
 import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/AuthContext';
-import Colors from '../../constants/Colors';
+import Colors from '../../constants/Colors'; 
 import { Spacing, FontSize, BorderRadius } from '../../constants/Spacing';
 
 type ClinicLink = { id: string; clinics: { name: string } | null };
@@ -35,6 +35,39 @@ export default function NewSessionScreen() {
   const load = useCallback(async () => {
     if (!profile) return;
     setError(null);
+
+    if (profile.role === 'RECEPTIONIST') {
+      // Receptionists see every doctor_clinics row at any clinic they're assigned to.
+      const { data: staffRows } = await supabase
+        .from('clinic_staff')
+        .select('clinic_id')
+        .eq('profile_id', profile.id)
+        .eq('is_active', true);
+
+      const clinicIds = (staffRows ?? []).map((r) => r.clinic_id);
+      if (clinicIds.length === 0) {
+        setClinics([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error: queryError } = await supabase
+        .from('doctor_clinics')
+        .select('id, clinics(name)')
+        .in('clinic_id', clinicIds);
+
+      if (queryError) {
+        setError('Could not load your clinics.');
+      } else {
+        const list = data as unknown as ClinicLink[];
+        setClinics(list);
+        if (list.length > 0) setSelectedClinic(list[0].id);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Doctor flow - unchanged.
     const { data: doctorRow } = await supabase
       .from('doctors')
       .select('id')
@@ -59,7 +92,7 @@ export default function NewSessionScreen() {
       setClinics(list);
       if (list.length > 0) setSelectedClinic(list[0].id);
     }
-    setLoading(false);
+    setLoading(false);    
   }, [profile]);
 
   useEffect(() => {
@@ -112,9 +145,14 @@ export default function NewSessionScreen() {
       />
     );
   }
-  if (clinics.length === 0) {
+    if (clinics.length === 0) {
+    if (profile?.role === 'RECEPTIONIST') {
+      return (
+        <ErrorView message="You are not assigned to a clinic yet. Ask a doctor to add you as a receptionist first." />
+      );
+    }
     return <ClinicSetupForm onDone={load} />;
-  }
+  }    
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
@@ -253,4 +291,4 @@ function ClinicSetupForm({ onDone }: { onDone: () => void }) {
       </View>
     </ScrollView>
   );
-}     
+}      

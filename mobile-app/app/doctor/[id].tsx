@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, Image } 
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { ClinicMap } from '../../components/ClinicMap';
 import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import Colors from '../../constants/Colors';
@@ -18,6 +19,18 @@ type Session = {
   status: string;
 };
 
+type ClinicInfo = {
+  id: string;
+  name: string;
+  address: string;
+  locality: string | null;
+  city: string;
+  state: string;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 type DoctorDetail = {
   id: string;
   display_name: string;
@@ -28,7 +41,7 @@ type DoctorDetail = {
   doctor_specialties: { specialties: { name: string } | null }[];
   doctor_clinics: {
     id: string;
-    clinics: { id: string; name: string; address: string; locality: string | null; city: string; phone: string | null } | null;
+    clinics: ClinicInfo | null;
     clinic_sessions: Session[];
   }[];
 };
@@ -53,6 +66,10 @@ function todayInIndia() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function fullAddress(c: ClinicInfo) {
+  return `${c.address}${c.locality ? ', ' + c.locality : ''}, ${c.city}, ${c.state}`;
+}
+
 export default function DoctorProfileScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
@@ -69,7 +86,7 @@ export default function DoctorProfileScreen() {
       .select(
         `id, display_name, bio, qualifications, photo_url, experience_years,
          doctor_specialties(specialties(name)),
-         doctor_clinics(id, clinics(id, name, address, locality, city, phone),
+         doctor_clinics(id, clinics(id, name, address, locality, city, state, phone, latitude, longitude),
            clinic_sessions(id, session_date, start_time, end_time, booking_mode, capacity, status))`
       )
       .eq('id', id)
@@ -144,20 +161,27 @@ export default function DoctorProfileScreen() {
         return (
           <View key={link.id}>
             {link.clinics ? (
-              <Pressable
-                onPress={() => router.push({ pathname: '/clinic/[id]', params: { id: link.clinics!.id } } as any)}
-              >
-                <Card>
-                  <Text style={[styles.clinicName, { color: colors.primary }]}>{link.clinics.name}</Text>
-                  <Text style={[styles.detail, { color: colors.text }]}>
-                    {link.clinics.address}
-                    {link.clinics.locality ? `, ${link.clinics.locality}` : ''}, {link.clinics.city}
-                  </Text>
-                  {link.clinics.phone ? (
-                    <Text style={[styles.detail, { color: colors.textMuted }]}>Phone: {link.clinics.phone}</Text>
-                  ) : null}
-                </Card>
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/clinic/[id]', params: { id: link.clinics!.id } } as any)}
+                >
+                  <Card>
+                    <Text style={[styles.clinicName, { color: colors.primary }]}>{link.clinics.name}</Text>
+                    <Text style={[styles.detail, { color: colors.text }]}>
+                      {link.clinics.address}
+                      {link.clinics.locality ? `, ${link.clinics.locality}` : ''}, {link.clinics.city}
+                    </Text>
+                  </Card>
+                </Pressable>
+
+                <View style={styles.directions}>
+                  <ClinicMap
+                    latitude={link.clinics.latitude}
+                    longitude={link.clinics.longitude}
+                    address={fullAddress(link.clinics)}
+                  />
+                </View>
+              </>
             ) : null}
 
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Available sessions</Text>
@@ -227,7 +251,8 @@ const styles = StyleSheet.create({
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   bio: { fontSize: FontSize.body, marginTop: Spacing.md, marginBottom: Spacing.md },
   clinicName: { fontSize: FontSize.heading, fontWeight: '600' },
+  directions: { marginBottom: Spacing.xs },
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.md, marginBottom: Spacing.sm },
   sessionDate: { fontSize: FontSize.large, fontWeight: '600' },
   note: { fontSize: FontSize.small, marginTop: Spacing.sm },
-});   
+});    
