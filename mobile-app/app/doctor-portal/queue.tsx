@@ -56,7 +56,7 @@ export default function QueueScreen() {
         .from('bookings')
         .select('id, token_number, appointment_start, patient_name, patient_age, status, profiles(full_name, phone)')
         .eq('session_id', sessionId)
-        .neq('status', 'CANCELLED')
+        .not('status', 'in', '(CANCELLED,EXPIRED,PENDING)')  
         .order('token_number', { ascending: true, nullsFirst: false })
         .order('appointment_start', { ascending: true }),
     ]);
