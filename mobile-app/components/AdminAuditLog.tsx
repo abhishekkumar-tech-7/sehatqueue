@@ -7,6 +7,7 @@ import { LoadingView, ErrorView, EmptyView } from './StateViews';
 import { supabase } from '../lib/supabase';
 import Colors from '../constants/Colors';
 import { Spacing, FontSize, BorderRadius } from '../constants/Spacing';
+import { formatRupees } from '../lib/money';
 
 type LogRow = {
   log_id: string;
@@ -29,6 +30,7 @@ const FILTERS: { label: string; value: string | null }[] = [
   { label: 'Sessions', value: 'session' },
   { label: 'Staff', value: 'clinic_staff' },
   { label: 'Clinics', value: 'clinic' },
+  { label: 'Settings', value: 'platform_settings' },
 ];
 
 function nice(value: unknown) {
@@ -56,8 +58,14 @@ function describe(row: LogRow): string {
       return m.to ? 'Staff member reactivated' : 'Staff member deactivated';
     case 'CLINIC_CREATED':
       return `Clinic created: ${m.name ?? ''}${m.city ? `, ${m.city}` : ''}`;
+    case 'DOCTOR_FEE_CHANGED':
+      return `Doctor ${m.doctor_name ?? ''} fee: ${formatRupees(m.from_paise ?? 0)} to ${formatRupees(m.to_paise ?? 0)}`;
+    case 'PLATFORM_FEE_CHANGED': {
+      const to = m.to ?? {};
+      return `Platform fee set to ${to.percent ?? 0}% (min ${formatRupees(to.min_paise ?? 0)}, max ${formatRupees(to.max_paise ?? 0)})`;
+    }  
     default:
-      return nice(row.log_action);
+      return nice(row.log_action);     
   }
 }
 

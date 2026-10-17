@@ -6,18 +6,20 @@ import { Button } from './Button';
 import { LoadingView, ErrorView, EmptyView } from './StateViews';
 import AdminReports from './AdminReports';
 import AdminAuditLog from './AdminAuditLog';
-import { supabase } from '../lib/supabase';
+import AdminFees from './AdminFees';
+import { supabase } from '../lib/supabase'; 
 import { Profile } from '../lib/AuthContext';
 import Colors from '../constants/Colors';
 import { Spacing, FontSize, BorderRadius } from '../constants/Spacing';
 
-type Section = 'approvals' | 'reports' | 'audit';
+type Section = 'approvals' | 'reports' | 'audit' | 'fees';
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'approvals', label: 'Approvals' },
   { key: 'reports', label: 'Reports' },
-  { key: 'audit', label: 'Audit Log' },
-];
+  { key: 'audit', label: 'Audit' },
+  { key: 'fees', label: 'Fees'},
+];    
 
 type PendingDoctor = {
   doctor_id: string;
@@ -184,6 +186,7 @@ export default function AdminHome({ profile }: { profile: Profile }) {
         {section === 'approvals' && <ApprovalsSection />}
         {section === 'reports' && <AdminReports />}
         {section === 'audit' && <AdminAuditLog />}
+        {section === 'fees' && <AdminFees />}    
       </View>
     </View>
   );

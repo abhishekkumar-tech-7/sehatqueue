@@ -192,6 +192,12 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
           onPress={() => router.push('/doctor-portal/edit-clinic' as any)}
           variant="secondary"
         />
+        <View style={{ height: Spacing.sm }} />  
+        <Button
+          title="Set Consultation Fee"
+          onPress={() => router.push('/doctor-portal/set-fee' as any)}
+          variant="secondary"
+        />
         <View style={{ height: Spacing.sm }} />
         <Button
           title="Add Receptionist"
