@@ -4,9 +4,12 @@ import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { TextField } from '../../components/TextField';
+import { FeePanel } from '../../components/FeePanel';
 import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/AuthContext';
+import { getFeeQuote, startPayment, FeeQuote } from '../../lib/checkout';
+import { formatRupees } from '../../lib/money';
 import Colors from '../../constants/Colors';
 import { Spacing, FontSize, BorderRadius } from '../../constants/Spacing';
 
@@ -32,6 +35,7 @@ export default function TokenBookingScreen() {
   const { profile } = useAuth();
 
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
+  const [quote, setQuote] = useState<FeeQuote | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'select' | 'details'>('select');
   const [details, setDetails] = useState<Record<number, PatientDetail>>({});
@@ -42,14 +46,16 @@ export default function TokenBookingScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error: queryError } = await supabase.rpc('get_session_token_status', {
-      p_session_id: sessionId,
-    });
+    const [tokenResult, feeQuote] = await Promise.all([
+      supabase.rpc('get_session_token_status', { p_session_id: sessionId }),
+      getFeeQuote(sessionId as string),
+    ]);
 
-    if (queryError || !data) {
+    if (tokenResult.error || !tokenResult.data) {
       setError('Could not load token availability. Please check your internet connection.');
     } else {
-      setTokens(data as TokenStatus[]);
+      setTokens(tokenResult.data as TokenStatus[]);
+      setQuote(feeQuote);
     }
     setLoading(false);
   }, [sessionId]);
@@ -59,6 +65,7 @@ export default function TokenBookingScreen() {
   }, [load]);
 
   const selectedList = Array.from(selected).sort((a, b) => a - b);
+  const payOnline = !!quote && quote.pay_mode !== 'OFF' && quote.online_paise > 0;
 
   function toggleToken(tokenNumber: number) {
     setSelected((prev) => {
@@ -79,7 +86,6 @@ export default function TokenBookingScreen() {
   function handleContinue() {
     if (selectedList.length === 0) return;
 
-    // Keep anything already typed; pre-fill the first token with the account holder's name.
     const next: Record<number, PatientDetail> = {};
     selectedList.forEach((tokenNumber, index) => {
       next[tokenNumber] =
@@ -112,26 +118,62 @@ export default function TokenBookingScreen() {
     return Object.keys(errors).length === 0;
   }
 
+  function resetToSelect() {
+    load();
+    setSelected(new Set());
+    setDetails({});
+    setStep('select');
+  }
+
   async function handleConfirm() {
     if (!validateDetails()) return;
 
+    const patients = selectedList.map((tokenNumber) => ({
+      token_number: tokenNumber,
+      name: details[tokenNumber].name.trim(),
+      age: parseInt(details[tokenNumber].age, 10),
+    }));
+
     setBooking(true);
+
+    // Online payment: the server reserves the tokens as PENDING and returns what to pay.
+    if (payOnline && quote) {
+      const result = await startPayment({
+        kind: 'token',
+        session_id: sessionId,
+        patients,
+        expected_total_paise: quote.total_paise, // price per token the patient saw
+      });
+      setBooking(false);
+
+      if (!result.ok) {
+        Alert.alert('Could not start payment', result.message);
+        resetToSelect();
+        return;
+      }
+      router.replace({
+        pathname: '/booking/pay',
+        params: {
+          orderId: result.data.order_id,
+          sessionId: result.data.payment_session_id, // Cashfree payment session
+          env: result.data.cashfree_env,
+          amountPaise: String(result.data.amount_paise),
+        },
+      } as any);
+      return;
+    }
+
+    // No online payment: book straight away (free or Pay at Clinic).
     const { data, error: bookError } = await supabase.rpc('book_tokens', {
       p_session_id: sessionId,
-      p_patients: selectedList.map((tokenNumber) => ({
-        token_number: tokenNumber,
-        name: details[tokenNumber].name.trim(),
-        age: parseInt(details[tokenNumber].age, 10),
-      })),
+      p_patients: patients,
+      p_expected_total_paise: quote ? quote.total_paise : null,
     });
     setBooking(false);
 
     if (bookError) {
       Alert.alert('Could not book', bookError.message);
-      load();
-      setSelected(new Set());
-      setDetails({});
-      setStep('select');
+      resetToSelect();
       return;
     }
 
@@ -157,6 +199,11 @@ export default function TokenBookingScreen() {
   }
 
   if (step === 'details') {
+    const confirmTitle =
+      payOnline && quote
+        ? `Pay ${formatRupees(quote.online_paise * selectedList.length)} & Confirm`
+        : `Confirm ${selectedList.length} Token${selectedList.length > 1 ? 's' : ''}`;
+
     return (
       <ScrollView
         style={{ backgroundColor: colors.background }}
@@ -174,7 +221,7 @@ export default function TokenBookingScreen() {
             <Card key={tokenNumber}>
               <Text style={[styles.cardTitle, { color: colors.primary }]}>
                 Token #{tokenNumber}
-                {token ? `  ·  about ${formatEstimatedTime(token.estimated_time)}` : ''}
+                {token ? `  -  about ${formatEstimatedTime(token.estimated_time)}` : ''}
               </Text>
               <TextField
                 label="Patient Name"
@@ -196,13 +243,10 @@ export default function TokenBookingScreen() {
           );
         })}
 
+        {quote ? <FeePanel quote={quote} count={selectedList.length} /> : null}
+
         <View style={styles.footer}>
-          <Button
-            title={`Confirm ${selectedList.length} Token${selectedList.length > 1 ? 's' : ''}`}
-            onPress={handleConfirm}
-            variant="primary"
-            loading={booking}
-          />
+          <Button title={confirmTitle} onPress={handleConfirm} variant="primary" loading={booking} />
         </View>
         <View style={styles.footer}>
           <Button title="Back" onPress={() => setStep('select')} variant="secondary" disabled={booking} />
@@ -292,4 +336,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
   },
   footer: { marginTop: Spacing.lg },
-});     
+});    

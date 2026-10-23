@@ -18,7 +18,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'approvals', label: 'Approvals' },
   { key: 'reports', label: 'Reports' },
   { key: 'audit', label: 'Audit' },
-  { key: 'fees', label: 'Fees'},
+  { key: 'fees', label: 'Fees' },
 ];    
 
 type PendingDoctor = {
@@ -200,10 +200,10 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', gap: Spacing.sm },
   switchChip: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 44,     
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.md,     
     borderWidth: 1,
   },
   list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },

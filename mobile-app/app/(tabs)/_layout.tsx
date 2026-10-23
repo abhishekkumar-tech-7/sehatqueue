@@ -10,13 +10,12 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { profile } = useAuth();
   const isDoctor = profile?.role === 'DOCTOR';
+  const isAdmin = profile?.role === 'ADMIN';
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
       }}>
       <Tabs.Screen
@@ -24,15 +23,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'house.fill',
-                android: 'home',
-                web: 'home',
-              }}
-              tintColor={color}
-              size={26}
-            />
+            <SymbolView name={{ ios: 'house.fill', android: 'home', web: 'home' }} tintColor={color} size={26} />
           ),
         }}
       />
@@ -40,14 +31,10 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: 'Bookings',
-          // Doctors get the Report tab instead of Bookings.
-          href: isDoctor ? null : undefined,
+          // Doctors get Report instead, and admins get Payments instead.
+          href: isDoctor || isAdmin ? null : undefined,
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'calendar', android: 'event', web: 'event' }}
-              tintColor={color}
-              size={26}
-            />
+            <SymbolView name={{ ios: 'calendar', android: 'event', web: 'event' }} tintColor={color} size={26} />
           ),
         }}
       />
@@ -57,11 +44,17 @@ export default function TabLayout() {
           title: 'Report',
           href: isDoctor ? undefined : null,
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
-              tintColor={color}
-              size={26}
-            />
+            <SymbolView name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }} tintColor={color} size={26} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="payments"
+        options={{
+          title: 'Payments',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <SymbolView name={{ ios: 'creditcard.fill', android: 'payments', web: 'payments' }} tintColor={color} size={26} />
           ),
         }}
       />
@@ -69,12 +62,10 @@ export default function TabLayout() {
         name="notifications"
         options={{
           title: 'Alerts',
+          // Admins have no booking alerts.
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
-              tintColor={color}
-              size={26}
-            />
+            <SymbolView name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }} tintColor={color} size={26} />
           ),
         }}
       />
@@ -83,14 +74,10 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'person.fill', android: 'person', web: 'person' }}
-              tintColor={color}
-              size={26}
-            />
+            <SymbolView name={{ ios: 'person.fill', android: 'person', web: 'person' }} tintColor={color} size={26} />
           ),
         }}
       />
     </Tabs>
   );
-}   
+}    

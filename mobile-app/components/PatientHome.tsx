@@ -114,7 +114,7 @@ export default function PatientHome({ profile }: { profile: Profile }) {
     if (tokenSessionIds.length === 0) return;
 
     const channel = supabase
-      .channel('home-token-updates')
+      .channel(`home-token-updates-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'clinic_sessions' },

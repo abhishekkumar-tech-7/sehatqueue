@@ -8,6 +8,8 @@ import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import Colors from '../../constants/Colors';
 import { Spacing, FontSize } from '../../constants/Spacing';
+import { FeeQuote } from '../../lib/checkout';
+import { formatRupees } from '../../lib/money';
 
 type Session = {
   id: string;
@@ -76,6 +78,7 @@ export default function DoctorProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null);
+  const [fee, setFee] = useState<FeeQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +99,9 @@ export default function DoctorProfileScreen() {
       setError('Could not load this doctor. Please check your internet connection.');
     } else {
       setDoctor(data as unknown as DoctorDetail);
+      const { data: feeData } = await supabase.rpc('get_doctor_fee_quote', { p_doctor_id: id });
+      const feeRow = Array.isArray(feeData) ? feeData[0] : feeData;
+      setFee((feeRow as FeeQuote) ?? null);
     }
     setLoading(false);
   }, [id]);
@@ -147,11 +153,15 @@ export default function DoctorProfileScreen() {
           ) : null}
         </View>
       </View>
-
       {doctor.qualifications ? (
         <Text style={[styles.detail, { color: colors.textMuted }]}>{doctor.qualifications}</Text>
       ) : null}
       {doctor.bio ? <Text style={[styles.bio, { color: colors.text }]}>{doctor.bio}</Text> : null}
+      {fee ? (
+        <Text style={[styles.feeLine, { color: colors.text }]}>
+          Consultation fee - {fee.consultation_paise === 0 ? 'Free' : formatRupees(fee.consultation_paise)}
+        </Text>
+      ) : null}
 
       {doctor.doctor_clinics.map((link) => {
         const sessions = link.clinic_sessions
@@ -255,4 +265,5 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.md, marginBottom: Spacing.sm },
   sessionDate: { fontSize: FontSize.large, fontWeight: '600' },
   note: { fontSize: FontSize.small, marginTop: Spacing.sm },
-});    
+  feeLine: { fontSize: FontSize.heading, fontWeight: '600', marginBottom: Spacing.md },
+});              

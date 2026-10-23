@@ -12,6 +12,8 @@ function json(body: unknown, status = 200) {
   });
 }
 
+const rupees = (paise: number) => (paise / 100).toFixed(2);
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -19,9 +21,11 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const keyId = Deno.env.get('RAZORPAY_KEY_ID');
-  const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
-  if (!keyId || !keySecret) return json({ error: 'Payments are not set up yet.' }, 500);
+  const clientId = Deno.env.get('CASHFREE_CLIENT_ID');
+  const clientSecret = Deno.env.get('CASHFREE_CLIENT_SECRET');
+  const cfEnv = Deno.env.get('CASHFREE_ENV') === 'production' ? 'production' : 'sandbox';
+  if (!clientId || !clientSecret) return json({ error: 'Payments are not set up yet.' }, 500);
+  const base = cfEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return json({ error: 'Please log in again.' }, 401);
@@ -40,21 +44,26 @@ Deno.serve(async (req) => {
     return json({ error: 'Invalid request.' }, 400);
   }
 
-  // "user" acts as the logged-in patient. "admin" is only used for settings and bookkeeping.
   const user = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
   const admin = createClient(url, serviceKey);
 
+  const { data: userData } = await user.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) return json({ error: 'Please log in again.' }, 401);
+
   const { data: settings } = await admin
     .from('platform_settings')
-    .select('online_payment_mode, route_enabled')
+    .select('route_enabled')
     .eq('id', true)
     .single();
+  if (!settings) return json({ error: 'Payments are not set up yet.' }, 500);
 
-  if (!settings || settings.online_payment_mode === 'OFF') {
-    return json({ error: 'Online payment is not switched on.' }, 400);
+  const { data: profile } = await admin.from('profiles').select('phone, email').eq('id', userId).single();
+  const phone = (profile?.phone ?? '').replace(/\D/g, '').slice(-10);
+  if (phone.length !== 10) {
+    return json({ error: 'Please add a valid 10-digit phone number in Profile before paying.' }, 400);
   }
 
-  // Find the doctor first, so we can refuse before reserving anything.
   const { data: sess } = await admin
     .from('clinic_sessions')
     .select('doctor_clinics(doctor_id)')
@@ -64,29 +73,31 @@ Deno.serve(async (req) => {
   const doctorId = (sess as any)?.doctor_clinics?.doctor_id as string | undefined;
   if (!doctorId) return json({ error: 'Session not found.' }, 404);
 
-  const useRoute = settings.online_payment_mode === 'FULL' && settings.route_enabled === true;
-  let accountId: string | null = null;
-  if (useRoute) {
-    const { data: acc } = await admin
+  // The payment mode is set per doctor, falling back to the platform default.
+  const { data: splitRows } = await admin.rpc('internal_payment_split', { p_doctor_id: doctorId });
+  const split = Array.isArray(splitRows) ? splitRows[0] : splitRows;
+  if (!split || split.fee_mode === 'OFF') {
+    return json({ error: 'Online payment is not switched on for this doctor.' }, 400);
+  }
+  const useSplit = split.fee_mode === 'FULL' && settings.route_enabled === true;
+  let vendorId: string | null = null;
+  if (useSplit) {
+    const { data: acc } = await admin    
       .from('doctor_payout_accounts')
-      .select('razorpay_account_id')
+      .select('vendor_id')
       .eq('doctor_id', doctorId)
       .maybeSingle();
-    accountId = acc?.razorpay_account_id ?? null;
-    if (!accountId) {
+    vendorId = acc?.vendor_id ?? null;
+    if (!vendorId) {
       return json({ error: "This doctor can't accept online payments yet. Please contact the clinic." }, 400);
     }
   }
 
-  // Reserve the booking as PENDING, as the patient. The database works out every amount.
+  // Reserve PENDING bookings as the patient. The database works out every amount.
   const rpcName = kind === 'token' ? 'start_token_checkout' : 'start_slot_checkout';
   const args =
     kind === 'token'
-      ? {
-          p_session_id: sessionId,
-          p_patients: body.patients,
-          p_expected_total_paise: body.expected_total_paise ?? null,
-        }
+      ? { p_session_id: sessionId, p_patients: body.patients, p_expected_total_paise: body.expected_total_paise ?? null }
       : {
           p_session_id: sessionId,
           p_start_time: body.start_time,
@@ -101,64 +112,68 @@ Deno.serve(async (req) => {
 
   const abort = () => admin.rpc('abort_checkout', { p_order_id: row.out_order_id });
 
-  if (useRoute && row.out_doctor_id !== doctorId) {
+  if (useSplit && row.out_doctor_id !== doctorId) {
     await abort();
     return json({ error: 'Could not start the payment. Please try again.' }, 409);
   }
 
-  // Ask Razorpay for the order, with the doctor's share as a transfer when Route is on.
+  // Our internal order UUID is also the Cashfree order_id.
   // deno-lint-ignore no-explicit-any
   const orderBody: Record<string, any> = {
-    amount: row.out_amount_paise,
-    currency: 'INR',
-    receipt: row.out_order_id,
-    notes: { internal_order_id: row.out_order_id },
+    order_id: row.out_order_id,
+    order_amount: rupees(row.out_amount_paise),
+    order_currency: 'INR',
+    customer_details: {
+      customer_id: userId,
+      customer_phone: phone,
+      ...(profile?.email ? { customer_email: profile.email } : {}),
+    },
+    order_meta: {
+      notify_url:
+        Deno.env.get('CASHFREE_NOTIFY_URL') ?? `${url}/functions/v1/cashfree-webhook`,
+      ...(Deno.env.get('CASHFREE_RETURN_URL') ? { return_url: Deno.env.get('CASHFREE_RETURN_URL') } : {}),
+    },
   };
 
-  let splitMethod: 'NONE' | 'ROUTE' | 'LEDGER' = 'NONE';
+  let splitMethod: 'NONE' | 'SPLIT' | 'LEDGER' = 'NONE';
   if (row.out_pay_mode === 'FULL') {
-    if (useRoute && accountId && row.out_doctor_share_paise > 0) {
-      orderBody.transfers = [
-        {
-          account: accountId,
-          amount: row.out_doctor_share_paise,
-          currency: 'INR',
-          notes: { internal_order_id: row.out_order_id },
-          on_hold: false,
-        },
-      ];
-      splitMethod = 'ROUTE';
+    if (useSplit && vendorId && row.out_doctor_share_paise > 0) {
+      // Easy Split: the doctor's share goes to the vendor; the platform keeps the remainder.
+      orderBody.order_splits = [{ vendor_id: vendorId, amount: rupees(row.out_doctor_share_paise) }];
+      splitMethod = 'SPLIT';
     } else {
       splitMethod = 'LEDGER';
     }
   }
 
   // deno-lint-ignore no-explicit-any
-  let razorpayOrder: any;
+  let cfOrder: any;
   try {
-    const resp = await fetch('https://api.razorpay.com/v1/orders', {
+    const resp = await fetch(`${base}/pg/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Basic ' + btoa(`${keyId}:${keySecret}`),
+        'x-api-version': '2023-08-01',
+        'x-client-id': clientId,
+        'x-client-secret': clientSecret,
       },
       body: JSON.stringify(orderBody),
     });
-    razorpayOrder = await resp.json();
+    cfOrder = await resp.json();
     if (!resp.ok) {
-      console.error('Razorpay order error', resp.status, JSON.stringify(razorpayOrder?.error ?? {}));
+      console.error('Cashfree order error', resp.status, JSON.stringify({ code: cfOrder?.code, message: cfOrder?.message }));
       await abort();
       return json({ error: 'Could not start the payment. Please try again.' }, 502);
     }
   } catch (e) {
-    console.error('Razorpay request failed', String(e));
+    console.error('Cashfree request failed', String(e));
     await abort();
     return json({ error: 'Could not reach the payment service. Please try again.' }, 502);
   }
 
-  const { error: attachError } = await admin.rpc('attach_razorpay_order', {
+  const { error: attachError } = await admin.rpc('attach_gateway_order', {
     p_order_id: row.out_order_id,
-    p_razorpay_order_id: razorpayOrder.id,
+    p_gateway_order_id: cfOrder.order_id,
     p_split_method: splitMethod,
   });
   if (attachError) {
@@ -169,11 +184,11 @@ Deno.serve(async (req) => {
 
   return json({
     order_id: row.out_order_id,
-    razorpay_order_id: razorpayOrder.id,
-    razorpay_key_id: keyId,
+    payment_session_id: cfOrder.payment_session_id,
+    cashfree_env: cfEnv,
     amount_paise: row.out_amount_paise,
     currency: 'INR',
     hold_expires_at: row.out_hold_expires_at,
     split_method: splitMethod,
   });
-});  
+});   
