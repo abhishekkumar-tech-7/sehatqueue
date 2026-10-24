@@ -2,12 +2,14 @@ import { useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import '../lib/i18n';
 import i18n from '../lib/i18n';
 
+import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
 export {
@@ -44,7 +46,7 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider> 
+    <AuthProvider>
       <RootLayoutNav />
     </AuthProvider>
   );
@@ -64,17 +66,25 @@ function RootLayoutNav() {
     } else if (session && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  },[session, loading, segments]);
+  }, [session, loading, segments]);
 
   useEffect(() => {
     if (profile?.preferred_language) {
       i18n.changeLanguage(profile.preferred_language);
     }
-  }, [profile?.preferred_language]);   
+  }, [profile?.preferred_language]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          // Brand teal (same as the app icon) with white text on every screen header.
+          headerStyle: { backgroundColor: Colors.light.primary  },  
+          headerTintColor: '#FFFFFF',
+          headerTitleStyle: { fontWeight: '600' },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="doctor/[id]" options={{ headerShown: true }} />
@@ -88,7 +98,7 @@ function RootLayoutNav() {
         <Stack.Screen name="doctor-portal/add-receptionist" options={{ headerShown: true }} />
         <Stack.Screen name="doctor-portal/edit-clinic" options={{ headerShown: true }} />
         <Stack.Screen name="doctor-portal/set-fee" options={{ headerShown: true }} />
-      </Stack>  
-    </ThemeProvider>             
-  );  
+      </Stack>
+    </ThemeProvider>
+  );
 }   

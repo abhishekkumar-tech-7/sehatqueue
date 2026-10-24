@@ -5,6 +5,7 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { LoadingView, ErrorView, EmptyView } from './StateViews';
 import { supabase } from '../lib/supabase';
+import { useBookingsRealtime } from '../lib/useBookingsRealtime';
 import { Profile } from '../lib/AuthContext';
 import Colors from '../constants/Colors';
 import { Spacing, FontSize } from '../constants/Spacing';
@@ -17,8 +18,11 @@ type SessionRow = {
   booking_mode: 'TOKEN' | 'SLOT';
   capacity: number;
   status: string;
+  block_label: string | null;
   doctor_clinics: { clinics: { name: string } | null } | null;
 };
+
+type Counts = { online: number; walkIn: number };
 
 function formatTime(value: string) {
   const [h, m] = value.split(':').map(Number);
@@ -36,7 +40,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
   const colors = Colors[colorScheme as 'light' | 'dark'];
 
   const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [bookedCounts, setBookedCounts] = useState<Record<string, number>>({});
+  const [counts, setCounts] = useState<Record<string, Counts>>({});
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +70,7 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
     const { data, error: queryError } = await supabase
       .from('clinic_sessions')
       .select(
-        `id, session_date, start_time, end_time, booking_mode, capacity, status,
+        `id, session_date, start_time, end_time, booking_mode, capacity, status, block_label,
          doctor_clinics!inner(clinics(name), doctor_id)`
       )
       .eq('doctor_clinics.doctor_id', doctorRow.id)
@@ -83,17 +87,22 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
     setSessions(sessionList);
 
     if (sessionList.length > 0) {
-      const { data: bookingCounts } = await supabase
+      const { data: bookingRows } = await supabase
         .from('bookings')
-        .select('session_id')
+        .select('session_id, source')
         .in('session_id', sessionList.map((s) => s.id))
-        .not('status', 'in', '(CANCELLED,EXPIRED)');
+        .not('status', 'in', '(CANCELLED,EXPIRED,PENDING)');
 
-      const counts: Record<string, number> = {};
-      (bookingCounts ?? []).forEach((b) => {
-        counts[b.session_id] = (counts[b.session_id] ?? 0) + 1;
+      const next: Record<string, Counts> = {};
+      (bookingRows ?? []).forEach((b) => {
+        const c = next[b.session_id] ?? { online: 0, walkIn: 0 };
+        if (b.source === 'WALK_IN') c.walkIn += 1;
+        else c.online += 1;
+        next[b.session_id] = c;
       });
-      setBookedCounts(counts);
+      setCounts(next);
+    } else {
+      setCounts({});
     }
 
     setLoading(false);
@@ -105,6 +114,8 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
       load();
     }, [load])
   );
+
+  useBookingsRealtime(load);
 
   if (loading) return <LoadingView message="Loading your dashboard..." />;
   if (error) {
@@ -182,6 +193,12 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
         />
         <View style={{ height: Spacing.sm }} />
         <Button
+          title="Schedule & Holidays"  
+          onPress={() => router.push('/doctor-portal/schedule' as any)}
+          variant="secondary"
+        />
+        <View style={{ height: Spacing.sm }} />
+        <Button
           title="Edit My Profile"
           onPress={() => router.push('/doctor-portal/edit-profile' as any)}
           variant="secondary"
@@ -192,10 +209,16 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
           onPress={() => router.push('/doctor-portal/edit-clinic' as any)}
           variant="secondary"
         />
-        <View style={{ height: Spacing.sm }} />  
+        <View style={{ height: Spacing.sm }} />
         <Button
           title="Set Consultation Fee"
           onPress={() => router.push('/doctor-portal/set-fee' as any)}
+          variant="secondary"
+        />
+        <View style={{ height: Spacing.sm }} />
+        <Button
+          title="Cancellation Policy"
+          onPress={() => router.push('/doctor-portal/refund-policy' as any)}
           variant="secondary"
         />
         <View style={{ height: Spacing.sm }} />
@@ -214,26 +237,32 @@ export default function DoctorHome({ profile }: { profile: Profile }) {
           message="You have no clinic sessions scheduled for today."
         />
       ) : (
-        sessions.map((s) => (
-          <Pressable
-            key={s.id}
-            onPress={() => router.push({ pathname: '/doctor-portal/queue', params: { sessionId: s.id } } as any)}
-          >
-            <Card>
-              <Text style={[styles.clinicName, { color: colors.primary }]}>
-                {s.doctor_clinics?.clinics?.name}
-              </Text>
-              <Text style={[styles.detail, { color: colors.text }]}>
-                {formatTime(s.start_time)} - {formatTime(s.end_time)}
-              </Text>
-              <Text style={[styles.detail, { color: colors.textMuted }]}>
-                {s.booking_mode === 'TOKEN' ? 'Token queue' : 'Appointments'} · {bookedCounts[s.id] ?? 0} /{' '}
-                {s.capacity} booked
-              </Text>
-              <Text style={[styles.status, { color: colors.warning }]}>{s.status}</Text>
-            </Card>
-          </Pressable>
-        ))
+        sessions.map((s) => {
+          const c = counts[s.id] ?? { online: 0, walkIn: 0 };
+          return (
+            <Pressable
+              key={s.id}
+              onPress={() => router.push({ pathname: '/doctor-portal/queue', params: { sessionId: s.id } } as any)}
+            >
+              <Card>
+                <Text style={[styles.clinicName, { color: colors.primary }]}>
+                  {s.block_label ? `${s.block_label} - ` : ''}
+                  {s.doctor_clinics?.clinics?.name}
+                </Text>
+                <Text style={[styles.detail, { color: colors.text }]}>
+                  {formatTime(s.start_time)} - {formatTime(s.end_time)}
+                </Text>
+                <Text style={[styles.detail, { color: colors.textMuted }]}>
+                  {s.booking_mode === 'TOKEN' ? 'Token queue' : 'Appointments'}
+                </Text>
+                <Text style={[styles.detail, { color: colors.text }]}>
+                  Online {c.online} | Walk-in {c.walkIn} | Total {c.online + c.walkIn} / {s.capacity}
+                </Text>
+                <Text style={[styles.status, { color: colors.warning }]}>{s.status}</Text>
+              </Card>
+            </Pressable>
+          );
+        })
       )}
     </ScrollView>
   );
@@ -247,4 +276,4 @@ const styles = StyleSheet.create({
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   buttonGroup: { marginTop: Spacing.lg },
-});   
+});     

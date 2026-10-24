@@ -9,14 +9,14 @@
   },
   "home": {
     "hello": "नमस्ते, {{name}}",
-    "searchPlaceholder": "जैसे शर्मा",
+    "searchPlaceholder": "जैसे शर्मा या हृदय रोग विशेषज्ञ",   
     "searchLabel": "डॉक्टर या क्लिनिक का नाम खोजें", 
     "searchResults": "खोज परिणाम",
     "noResults": "कोई डॉक्टर नहीं मिला। कोई और नाम या विशेषज्ञता आज़माएं।",
     "upcomingBookings": "आपकी आगामी बुकिंग",
     "noBookings": "अभी आपकी कोई बुकिंग नहीं है। शुरू करने के लिए ऊपर डॉक्टर खोजें।",
-    "yourToken": "आपका टोकन #{{number}}",
-    "nowServing": "अभी टोकन #{{number}} चल रहा है"
+    "yourToken": "आपका टोकन नंबर - {{number}}",
+    "nowServing": "अभी टोकन नंबर {{number}} चल रहा है"  
   },
   "bookings": {
     "title": "मेरी बुकिंग",

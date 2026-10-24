@@ -9,14 +9,14 @@
   },
   "home": {
     "hello": "Hello, {{name}}",
-    "searchPlaceholder": "e.g. Sharma",
-    "searchLabel": "Search by doctors or clinic name", 
+    "searchPlaceholder": "e.g. Sharma or General Physician",
+    "searchLabel": "Search by doctors or clinic name or Specialty",      
     "searchResults": "Search results",
     "noResults": "No doctors found. Try a different name or specialty.",
     "upcomingBookings": "Your upcoming bookings",
     "noBookings": "You don't have any upcoming bookings yet. Search for a doctor above to get started.",
-    "yourToken": "Your token #{{number}}",
-    "nowServing": "Now serving #{{number}}"
+    "yourToken": "Your token No. - {{number}}",
+    "nowServing": "Now serving: {{number}}" 
   },
   "bookings": {
     "title": "My Bookings",

@@ -17,6 +17,10 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme].tint,
         headerShown: useClientOnlyValue(false, true),
+        // Brand teal (same as the app icon) with white text on the top bar.
+        headerStyle: { backgroundColor:  Colors.light.primary  },  
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: { fontWeight: '600' },
       }}>
       <Tabs.Screen
         name="index"
@@ -80,4 +84,4 @@ export default function TabLayout() {
       />
     </Tabs>
   );
-}    
+}   

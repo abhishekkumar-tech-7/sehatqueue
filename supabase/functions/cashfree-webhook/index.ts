@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
+import { processRefunds } from '../_shared/refunds.ts';
 // Cashfree signs: base64( HMAC-SHA256( timestamp + rawBody, client_secret ) )
 async function sign(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -42,6 +42,27 @@ Deno.serve(async (req) => {
 
   const type = event?.type as string | undefined;
   // Only successful payments confirm a booking. Everything else is acknowledged and ignored.
+  // Refund status updates from Cashfree.
+  if (type === 'REFUND_STATUS_WEBHOOK') {
+    const refund = event?.data?.refund;
+    const st = String(refund?.refund_status ?? '').toUpperCase();
+    const rid = String(refund?.refund_id ?? '');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rid);
+    if (isUuid && (st === 'SUCCESS' || st === 'CANCELLED' || st === 'FAILED')) {
+      const adminR = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { error: markError } = await adminR.rpc('internal_mark_refund', {
+        p_refund_id: rid,
+        p_status: st === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+        p_gateway_refund_id: refund?.cf_refund_id ? String(refund.cf_refund_id) : null,
+        p_failure: st === 'SUCCESS' ? null : String(refund?.status_description ?? st),
+      });
+      if (markError) {
+        console.error('refund mark failed', rid, markError.message);
+        return new Response('Retry', { status: 500 });
+      }
+    }
+    return new Response('ok', { status: 200 });
+  }
   if (type !== 'PAYMENT_SUCCESS_WEBHOOK') return new Response('ok', { status: 200 });
 
   const orderId = event?.data?.order?.order_id as string | undefined;
@@ -63,11 +84,18 @@ Deno.serve(async (req) => {
     console.error('confirm_payment failed', orderId, error.message);
     return new Response('Retry', { status: 500 }); // Cashfree retries
   }
-  if (data === 'REFUND_DUE') console.error('REFUND DUE for order', orderId);
+  if (data === 'REFUND_DUE') {
+    console.error('REFUND DUE for order', orderId);
+    try {
+      await processRefunds(admin);
+    } catch (e) {
+      console.error('processRefunds failed', String(e));
+    }
+  }
 
-  await admin.from('payment_events').insert({
+  await admin.from('payment_events').insert({      
     gateway_event_id: `${type}:${payment.cf_payment_id}`,
     event_type: type,
   });
   return new Response('ok', { status: 200 });
-});  
+});   

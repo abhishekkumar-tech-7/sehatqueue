@@ -18,6 +18,7 @@ type UpcomingBooking = {
   session_id: string;
   status: string;
   doctor_clinics: { doctors: { display_name: string } | null; clinics: { name: string } | null } | null;
+  clinic_sessions: { session_date: string; start_time: string; end_time: string; block_label: string | null } | null;
 };
 
 type SessionLiveState = { current_token: number; last_token_issued: number };
@@ -43,6 +44,23 @@ function formatDateTime(iso: string) {
   });
 }
 
+function clock(value: string) {
+  const [h, m] = value.split(':').map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+function sessionLine(s: { session_date: string; start_time: string; end_time: string; block_label: string | null }) {
+  const h = parseInt(s.start_time.slice(0, 2), 10);
+  const name = s.block_label || (h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night');
+  const [y, m, d] = s.session_date.split('-').map(Number);
+  const day = new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day} - ${name} (${clock(s.start_time)} - ${clock(s.end_time)})`;
+}
+
+function formatEstimatedTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 export default function PatientHome({ profile }: { profile: Profile }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
@@ -50,6 +68,7 @@ export default function PatientHome({ profile }: { profile: Profile }) {
 
   const [upcoming, setUpcoming] = useState<UpcomingBooking[]>([]);
   const [liveState, setLiveState] = useState<Record<string, SessionLiveState>>({});
+  const [estimates, setEstimates] = useState<Record<string, string>>({});
   const [doctors, setDoctors] = useState<DoctorRow[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [query, setQuery] = useState('');
@@ -62,10 +81,11 @@ export default function PatientHome({ profile }: { profile: Profile }) {
         .from('bookings')
         .select(
           `id, booking_mode, token_number, appointment_start, session_id, status,
-           doctor_clinics(doctors(display_name), clinics(name))`
+           doctor_clinics(doctors(display_name), clinics(name)),
+           clinic_sessions(session_date, start_time, end_time, block_label)`
         )
         .eq('patient_id', profile.id)
-        .in('status', ['CONFIRMED', 'ON_HOLD'])    
+        .in('status', ['CONFIRMED', 'ON_HOLD'])
         .order('created_at', { ascending: false }),
       supabase
         .from('doctors')
@@ -95,6 +115,18 @@ export default function PatientHome({ profile }: { profile: Profile }) {
         state[s.id] = { current_token: s.current_token, last_token_issued: s.last_token_issued };
       });
       setLiveState(state);
+
+      // The same estimate the patient saw when booking the token.
+      const estimateMap: Record<string, string> = {};
+      await Promise.all(
+        tokenSessionIds.map(async (sid) => {
+          const { data: rows } = await supabase.rpc('get_session_token_status', { p_session_id: sid });
+          ((rows ?? []) as { token_number: number; estimated_time: string }[]).forEach((r) => {
+            estimateMap[`${sid}:${r.token_number}`] = r.estimated_time;
+          });
+        })
+      );
+      setEstimates(estimateMap);
     }
 
     setLoading(false);
@@ -145,12 +177,22 @@ export default function PatientHome({ profile }: { profile: Profile }) {
       const matchesClinic = d.doctor_clinics.some((link) =>
         link.clinics?.name.toLowerCase().includes(text)
       );
-      const matchesText = !text || matchesName || matchesClinic;
+      const matchesSpecialtyName = d.doctor_specialties.some((s) =>
+        s.specialties?.name.toLowerCase().includes(text)
+      );
+      const matchesText = !text || matchesName || matchesClinic || matchesSpecialtyName;
       const matchesSpecialty =
         !selectedSlug || d.doctor_specialties.some((s) => s.specialties?.slug === selectedSlug);
       return matchesText && matchesSpecialty;
     });
   }, [doctors, query, selectedSlug]);
+
+  // "General Physician" first, then the rest in their usual order.
+  const sortedSpecialties = useMemo(() => {
+    const isGp = (s: Specialty) =>
+      s.slug === 'general-physician' || s.name.toLowerCase().includes('general physician');
+    return [...specialties].sort((a, b) => Number(isGp(b)) - Number(isGp(a)));
+  }, [specialties]);
 
   const showSearchResults = query.trim().length > 0 || selectedSlug !== null;
 
@@ -168,12 +210,12 @@ export default function PatientHome({ profile }: { profile: Profile }) {
         label={t('home.searchLabel')}
         placeholder={t('home.searchPlaceholder')}
         value={query}
-        onChangeText={setQuery} 
-      />   
+        onChangeText={setQuery}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-        {[{ id: 'all', name: 'All', slug: null as string | null }, ...specialties].map((s) => {
-          const active = selectedSlug === s.slug;
+        {[{ id: 'all', name: 'All', slug: null as string | null }, ...sortedSpecialties].map((s) => {
+          const active = selectedSlug === s.slug;    
           return (
             <Pressable
               key={s.id}
@@ -247,11 +289,20 @@ export default function PatientHome({ profile }: { profile: Profile }) {
                     <Text style={[styles.detail, { color: colors.textMuted }]}>
                       {b.doctor_clinics?.clinics?.name}
                     </Text>
+                    {b.clinic_sessions ? (
+                      <Text style={[styles.detail, { color: colors.textMuted }]}>{sessionLine(b.clinic_sessions)}</Text>
+                    ) : null}
                     {b.booking_mode === 'TOKEN' ? (
                       <>
                         <Text style={[styles.detail, { color: colors.text }]}>
                           {t('home.yourToken', { number: b.token_number })}
                         </Text>
+                        {estimates[`${b.session_id}:${b.token_number}`] ? (
+                          <Text style={[styles.detail, { color: colors.textMuted }]}>
+                            {t('home.estimatedTime', { defaultValue: 'Estimated time to visit clinic' })}:{' '}
+                            {formatEstimatedTime(estimates[`${b.session_id}:${b.token_number}`])}
+                          </Text>   
+                        ) : null}
                         {live ? (
                           <Text style={[styles.liveStatus, { color: colors.success }]}>
                             {t('home.nowServing', { number: live.current_token > 0 ? live.current_token : '-' })}
@@ -294,4 +345,4 @@ const styles = StyleSheet.create({
   clinic: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm },
   liveStatus: { fontSize: FontSize.body, fontWeight: '700', marginTop: Spacing.xs },
   emptyText: { fontSize: FontSize.body },
-});   
+});    

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, useColorScheme, Alert } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { LoadingView, ErrorView, EmptyView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
+import { useBookingsRealtime } from '../../lib/useBookingsRealtime';
 import Colors from '../../constants/Colors';
 import { Spacing, FontSize } from '../../constants/Spacing';
 
@@ -15,10 +16,12 @@ type BookingRow = {
   patient_name: string | null;
   patient_age: number | null;
   status: string;
+  source: string | null;
   profiles: { full_name: string; phone: string | null } | null;
 };
 
 type SessionInfo = {
+  session_date: string;
   current_token: number;
   last_token_issued: number;
   capacity: number;
@@ -30,6 +33,10 @@ type QueueAction = 'COMPLETED' | 'ON_HOLD' | 'SKIPPED';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function todayInIndia() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export default function QueueScreen() {
@@ -49,14 +56,14 @@ export default function QueueScreen() {
     const [sessionResult, bookingsResult] = await Promise.all([
       supabase
         .from('clinic_sessions')
-        .select('current_token, last_token_issued, capacity, booking_mode, status')
+        .select('session_date, current_token, last_token_issued, capacity, booking_mode, status')
         .eq('id', sessionId)
         .single(),
       supabase
         .from('bookings')
-        .select('id, token_number, appointment_start, patient_name, patient_age, status, profiles(full_name, phone)')
+        .select('id, token_number, appointment_start, patient_name, patient_age, status, source, profiles(full_name, phone)')
         .eq('session_id', sessionId)
-        .not('status', 'in', '(CANCELLED,EXPIRED,PENDING)')  
+        .not('status', 'in', '(CANCELLED,EXPIRED,PENDING)')
         .order('token_number', { ascending: true, nullsFirst: false })
         .order('appointment_start', { ascending: true }),
     ]);
@@ -73,6 +80,9 @@ export default function QueueScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Reload when this screen is shown again (for example after adding a walk-in) and when bookings change.
+  useBookingsRealtime(load);
 
   async function handleCallNext() {
     setCallingNext(true);
@@ -100,7 +110,25 @@ export default function QueueScreen() {
       Alert.alert('Could not update session', statusError.message);
       return;
     }
+    if (newStatus === 'CLOSED') {
+      // Closing cancels unseen patients and queues refunds for those who paid online.
+      // Send those refunds now. If this fails they are retried later.
+      supabase.functions.invoke('process-refunds').catch(() => {});
+    }
     load();
+  }
+
+  function confirmClose() {
+    const waiting = bookings.filter((b) => b.status === 'CONFIRMED' || b.status === 'ON_HOLD').length;
+    Alert.alert(
+      'Close this session?',
+      (waiting > 0 ? `${waiting} patient(s) have not been seen yet and will be cancelled. ` : '') +
+        'Anyone who paid online is refunded in full. If a patient did not arrive, mark them Skip first so they are not refunded.',
+      [
+        { text: 'Keep open', style: 'cancel' },
+        { text: 'Close session', style: 'destructive', onPress: () => handleSessionStatus('CLOSED') },
+      ]
+    );
   }
 
   async function handleBookingAction(bookingId: string, action: QueueAction) {
@@ -131,6 +159,13 @@ export default function QueueScreen() {
     );
   }
 
+  const walkIns = bookings.filter((b) => b.source === 'WALK_IN').length;
+  const online = bookings.length - walkIns;
+  const canAddWalkIn =
+    session.booking_mode === 'TOKEN' &&
+    (session.status === 'OPEN' || session.status === 'PAUSED') &&
+    session.session_date === todayInIndia();
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'Queue' }} />
@@ -153,10 +188,36 @@ export default function QueueScreen() {
           )}
           {(session.status === 'OPEN' || session.status === 'PAUSED') && (
             <View style={styles.actionButton}>
-              <Button title="Close Session" onPress={() => handleSessionStatus('CLOSED')} variant="danger" />
+              <Button title="Close Session" onPress={confirmClose} variant="danger" />
             </View>
           )}
         </View>
+      </Card>
+
+      <Card>
+        <View style={styles.statsRow}>
+          <View style={styles.stat}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{online}</Text>
+            <Text style={[styles.currentLabel, { color: colors.textMuted }]}>Online</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{walkIns}</Text>
+            <Text style={[styles.currentLabel, { color: colors.textMuted }]}>Walk-in</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={[styles.statNumber, { color: colors.primary }]}>{bookings.length}</Text>
+            <Text style={[styles.currentLabel, { color: colors.textMuted }]}>Total</Text>
+          </View>
+        </View>
+        {canAddWalkIn ? (
+          <View style={{ marginTop: Spacing.sm }}>
+            <Button
+              title="+ Add Walk-in"
+              onPress={() => router.push({ pathname: '/doctor-portal/walk-in', params: { sessionId } } as any)}
+              variant="secondary"
+            />
+          </View>
+        ) : null}
       </Card>
 
       {session.booking_mode === 'TOKEN' && (
@@ -191,6 +252,7 @@ export default function QueueScreen() {
               <Text style={[styles.patientName, { color: colors.text }]}>
                 {displayName}
                 {item.patient_age != null ? `, ${item.patient_age} yrs` : ''}
+                {item.source === 'WALK_IN' ? '  (Walk-in)' : ''}
               </Text>
               {item.profiles?.phone ? (
                 <Text style={[styles.detail, { color: colors.textMuted }]}>{item.profiles.phone}</Text>
@@ -253,4 +315,7 @@ const styles = StyleSheet.create({
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
   actionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   actionButton: { flex: 1 },
-});      
+  statsRow: { flexDirection: 'row' },
+  stat: { flex: 1, alignItems: 'center' },
+  statNumber: { fontSize: FontSize.title, fontWeight: 'bold' },
+});   

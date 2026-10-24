@@ -3,15 +3,13 @@ import { View, Text, StyleSheet, ScrollView, Pressable, useColorScheme, Alert } 
 import { Stack } from 'expo-router';
 import { TextField } from '../../components/TextField';
 import { Button } from '../../components/Button';
-import { FeeSummary } from '../../components/FeeSummary';
+import { Card } from '../../components/Card';
 import { LoadingView, ErrorView } from '../../components/StateViews';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/AuthContext';
 import { formatRupees } from '../../lib/money';
 import Colors from '../../constants/Colors';
 import { Spacing, FontSize, BorderRadius } from '../../constants/Spacing';
-
-type Quote = { consultation_paise: number; platform_paise: number; total_paise: number };
 
 export default function SetFeeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -22,16 +20,10 @@ export default function SetFeeScreen() {
   const [isFree, setIsFree] = useState(true);
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState<string | undefined>();
-  const [quote, setQuote] = useState<Quote | null>(null);
+  const [currentPaise, setCurrentPaise] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const loadQuote = useCallback(async (id: string) => {
-    const { data } = await supabase.rpc('get_doctor_fee_quote', { p_doctor_id: id });
-    const row = Array.isArray(data) ? data[0] : data;
-    setQuote((row as Quote) ?? null);
-  }, []);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -52,9 +44,9 @@ export default function SetFeeScreen() {
     setDoctorId(data.id);
     setIsFree(data.consultation_fee_paise === 0);
     setAmount(data.consultation_fee_paise > 0 ? String(data.consultation_fee_paise / 100) : '');
-    await loadQuote(data.id);
+    setCurrentPaise(data.consultation_fee_paise);
     setLoading(false);
-  }, [profile, loadQuote]);
+  }, [profile]);
 
   useEffect(() => {
     load();
@@ -166,19 +158,18 @@ export default function SetFeeScreen() {
         <Button title="Save Fee" onPress={handleSave} variant="primary" loading={saving} />
       </View>
 
-      {quote ? (
-        <View style={styles.preview}>
-          <Text style={[styles.previewTitle, { color: colors.text }]}>What patients see right now</Text>
-          <FeeSummary
-            consultationPaise={quote.consultation_paise}
-            platformPaise={quote.platform_paise}
-            totalPaise={quote.total_paise}
-          />
-          <Text style={[styles.note, { color: colors.textMuted }]}>
-            The platform fee is set by the app administrator and is added on top of your fee.
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.preview}>
+        <Text style={[styles.previewTitle, { color: colors.text }]}>Your current fee</Text>
+        <Card>
+          {currentPaise > 0 ? (
+            <Text style={[styles.current, { color: colors.primary }]}>
+              Consultation fee - {formatRupees(currentPaise)}
+            </Text>
+          ) : (
+            <Text style={[styles.current, { color: colors.success }]}>Free consultation</Text>
+          )}
+        </Card>
+      </View>
     </ScrollView>
   );
 }
@@ -198,4 +189,5 @@ const styles = StyleSheet.create({
   buttonGroup: { marginTop: Spacing.md },
   preview: { marginTop: Spacing.xl },
   previewTitle: { fontSize: FontSize.large, fontWeight: '600', marginBottom: Spacing.sm },
-});   
+  current: { fontSize: FontSize.large, fontWeight: '600' },
+});    

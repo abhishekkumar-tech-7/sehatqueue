@@ -28,6 +28,22 @@ function formatEstimatedTime(iso: string) {
 
 const MAX_SELECTABLE = 5;
 
+type SessionHead = { session_date: string; start_time: string; end_time: string; block_label: string | null };
+
+function clock(value: string) {
+  const [h, m] = value.split(':').map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+// For example "Tue, 28 Oct - Evening". Uses the doctor's name for the session, or one based on the start time.
+function sessionTitle(s: SessionHead) {
+  const h = parseInt(s.start_time.slice(0, 2), 10);
+  const name = s.block_label || (h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night');
+  const [y, m, d] = s.session_date.split('-').map(Number);
+  const day = new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day} - ${name}`;
+}
+
 export default function TokenBookingScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
@@ -36,6 +52,7 @@ export default function TokenBookingScreen() {
 
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
   const [quote, setQuote] = useState<FeeQuote | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<SessionHead | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'select' | 'details'>('select');
   const [details, setDetails] = useState<Record<number, PatientDetail>>({});
@@ -46,9 +63,14 @@ export default function TokenBookingScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [tokenResult, feeQuote] = await Promise.all([
+    const [tokenResult, feeQuote, sessionResult] = await Promise.all([
       supabase.rpc('get_session_token_status', { p_session_id: sessionId }),
       getFeeQuote(sessionId as string),
+      supabase
+        .from('clinic_sessions')
+        .select('session_date, start_time, end_time, block_label')
+        .eq('id', sessionId)
+        .single(),
     ]);
 
     if (tokenResult.error || !tokenResult.data) {
@@ -56,6 +78,7 @@ export default function TokenBookingScreen() {
     } else {
       setTokens(tokenResult.data as TokenStatus[]);
       setQuote(feeQuote);
+      setSessionInfo((sessionResult.data as SessionHead | null) ?? null);
     }
     setLoading(false);
   }, [sessionId]);
@@ -182,7 +205,9 @@ export default function TokenBookingScreen() {
       .map((r) => `Token #${r.token_number} (${details[r.token_number]?.name.trim()}) - Ref: ${r.booking_reference}`)
       .join('\n');
 
-    Alert.alert('Tokens booked', summary, [{ text: 'OK', onPress: () => router.back() }]);
+    Alert.alert('Tokens booked', (sessionInfo ? sessionTitle(sessionInfo) + '\n' : '') + summary, [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
   }
 
   if (loading) return <LoadingView message="Loading tokens..." />;
@@ -211,6 +236,16 @@ export default function TokenBookingScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Stack.Screen options={{ title: 'Patient Details' }} />
+        {sessionInfo ? (
+          <View style={{ marginBottom: Spacing.md }}>
+            <Text style={{ fontSize: FontSize.heading, fontWeight: '600', color: colors.text }}>
+              {sessionTitle(sessionInfo)}
+            </Text>
+            <Text style={{ fontSize: FontSize.body, color: colors.textMuted }}>
+              {clock(sessionInfo.start_time)} - {clock(sessionInfo.end_time)}
+            </Text>
+          </View>
+        ) : null}
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
           Enter the name and age of the person each token is for.
         </Text>
@@ -243,7 +278,7 @@ export default function TokenBookingScreen() {
           );
         })}
 
-        {quote ? <FeePanel quote={quote} count={selectedList.length} /> : null}
+        {quote ? <FeePanel quote={quote} count={selectedList.length} sessionId={sessionId as string} /> : null}
 
         <View style={styles.footer}>
           <Button title={confirmTitle} onPress={handleConfirm} variant="primary" loading={booking} />
@@ -258,6 +293,16 @@ export default function TokenBookingScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'Choose Tokens' }} />
+      {sessionInfo ? (
+        <View style={{ marginBottom: Spacing.md }}>
+          <Text style={{ fontSize: FontSize.heading, fontWeight: '600', color: colors.text }}>
+            {sessionTitle(sessionInfo)}
+          </Text>
+          <Text style={{ fontSize: FontSize.body, color: colors.textMuted }}>
+            {clock(sessionInfo.start_time)} - {clock(sessionInfo.end_time)}
+          </Text>
+        </View>
+      ) : null}
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Select up to {MAX_SELECTABLE} tokens (e.g. for family members). Times shown are estimates, not guaranteed.
       </Text>
@@ -336,4 +381,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
   },
   footer: { marginTop: Spacing.lg },
-});    
+});   

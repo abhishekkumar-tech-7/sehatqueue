@@ -1,0 +1,1 @@
+alter table public.bookings drop constraint if exists bookings_created_by_fkey;  

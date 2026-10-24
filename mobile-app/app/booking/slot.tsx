@@ -16,6 +16,7 @@ type SessionInfo = {
   session_date: string;
   start_time: string;
   end_time: string;
+  block_label: string | null;
 };
 
 function buildSlots(session: SessionInfo) {
@@ -42,6 +43,20 @@ function formatSlotTime(date: Date) {
   return date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
+function clock(value: string) {
+  const [h, m] = value.split(':').map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+// For example "Tue, 28 Oct - Evening". Uses the doctor's name for the session, or one based on the start time.
+function sessionTitle(s: SessionInfo) {
+  const h = parseInt(s.start_time.slice(0, 2), 10);
+  const name = s.block_label || (h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night');
+  const [y, m, d] = s.session_date.split('-').map(Number);
+  const day = new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day} - ${name}`;
+}
+
 export default function SlotBookingScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme as 'light' | 'dark'];
@@ -60,7 +75,7 @@ export default function SlotBookingScreen() {
 
     const { data: sessionData, error: sessionError } = await supabase
       .from('clinic_sessions')
-      .select('session_date, start_time, end_time, doctor_clinic_id')
+      .select('session_date, start_time, end_time, block_label, doctor_clinic_id')
       .eq('id', sessionId)
       .single();
 
@@ -141,12 +156,12 @@ export default function SlotBookingScreen() {
     const result = Array.isArray(data) ? data[0] : data;
     Alert.alert(
       'Appointment booked',
-      `Your appointment is at ${formatSlotTime(chosen)}.\nReference: ${result.booking_reference}`,
+      `Your appointment: ${session ? sessionTitle(session) + ', ' : ''}${formatSlotTime(chosen)}.\nReference: ${result.booking_reference}`,
       [{ text: 'OK', onPress: () => router.back() }]
     );
   }
 
-  if (loading) return <LoadingView message="Loading available times..." />;
+  if (loading) return <LoadingView message="Loading available times..." />;   
   if (error || !session) {
     return (
       <ErrorView
@@ -165,7 +180,10 @@ export default function SlotBookingScreen() {
       contentContainerStyle={styles.container}
     >
       <Stack.Screen options={{ title: 'Choose a Time' }} />
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>Select an available 15-minute slot</Text>
+      <Text style={{ fontSize: FontSize.heading, fontWeight: '600', color: colors.text }}>{sessionTitle(session)}</Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        {clock(session.start_time)} - {clock(session.end_time)}. Select an available 15-minute slot.
+      </Text>
 
       {slots.length === 0 ? (
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
@@ -208,7 +226,7 @@ export default function SlotBookingScreen() {
       {chosen ? (
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={[styles.chosen, { color: colors.text }]}>Selected: {formatSlotTime(chosen)}</Text>
-          {quote ? <FeePanel quote={quote} count={1} /> : null}
+          {quote ? <FeePanel quote={quote} count={1} sessionId={sessionId as string} /> : null}   
           <View style={{ marginTop: Spacing.md }}>
             <Button
               title={payOnline && quote ? `Pay ${formatRupees(quote.online_paise)} & Confirm` : 'Confirm Appointment'}

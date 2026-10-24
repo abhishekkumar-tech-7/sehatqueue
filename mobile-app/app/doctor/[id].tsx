@@ -19,6 +19,7 @@ type Session = {
   booking_mode: 'TOKEN' | 'SLOT';
   capacity: number;
   status: string;
+  block_label: string | null;
 };
 
 type ClinicInfo = {
@@ -68,6 +69,25 @@ function todayInIndia() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function nowTimeInIndia() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(11, 16);
+}
+
+function addDays(ymd: string, n: number) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+// The doctor's own name for the session, or one based on the start time.
+function blockName(s: Session) {
+  if (s.block_label) return s.block_label;
+  const h = parseInt(s.start_time.slice(0, 2), 10);
+  if (h < 12) return 'Morning';
+  if (h < 17) return 'Afternoon';
+  if (h < 21) return 'Evening';
+  return 'Night';
+}
+
 function fullAddress(c: ClinicInfo) {
   return `${c.address}${c.locality ? ', ' + c.locality : ''}, ${c.city}, ${c.state}`;
 }
@@ -79,6 +99,7 @@ export default function DoctorProfileScreen() {
 
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null);
   const [fee, setFee] = useState<FeeQuote | null>(null);
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,7 +111,7 @@ export default function DoctorProfileScreen() {
         `id, display_name, bio, qualifications, photo_url, experience_years,
          doctor_specialties(specialties(name)),
          doctor_clinics(id, clinics(id, name, address, locality, city, state, phone, latitude, longitude),
-           clinic_sessions(id, session_date, start_time, end_time, booking_mode, capacity, status))`
+           clinic_sessions(id, session_date, start_time, end_time, booking_mode, capacity, status, block_label))`
       )
       .eq('id', id)
       .single();
@@ -128,6 +149,14 @@ export default function DoctorProfileScreen() {
     .filter(Boolean)
     .join(', ');
   const today = todayInIndia();
+  const tomorrow = addDays(today, 1);
+  const nowTime = nowTimeInIndia();
+
+  function dayLabel(date: string) {
+    if (date === today) return 'Today';
+    if (date === tomorrow) return 'Tomorrow';
+    return formatDate(date);
+  }
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
@@ -165,8 +194,20 @@ export default function DoctorProfileScreen() {
 
       {doctor.doctor_clinics.map((link) => {
         const sessions = link.clinic_sessions
-          .filter((s) => s.status === 'OPEN' && s.session_date >= today)
+          .filter(
+            (s) =>
+              s.status === 'OPEN' &&
+              (s.session_date > today || (s.session_date === today && s.end_time.slice(0, 5) > nowTime))
+          )
           .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
+
+        // One group per date, in date order.
+        const days: { date: string; items: Session[] }[] = [];
+        sessions.forEach((s) => {
+          const last = days[days.length - 1];
+          if (last && last.date === s.session_date) last.items.push(s);
+          else days.push({ date: s.session_date, items: [s] });
+        });
 
         return (
           <View key={link.id}>
@@ -196,45 +237,74 @@ export default function DoctorProfileScreen() {
 
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Available sessions</Text>
 
-            {sessions.length === 0 ? (
+            {days.length === 0 ? (
               <Text style={[styles.detail, { color: colors.textMuted }]}>No open sessions right now.</Text>
             ) : (
-              sessions.map((s) => (
-                <Card key={s.id}>
-                  <Text style={[styles.sessionDate, { color: colors.text }]}>
-                    {s.session_date === today ? 'Today' : formatDate(s.session_date)}
-                  </Text>
-                  <Text style={[styles.detail, { color: colors.textMuted }]}>
-                    {formatTime(s.start_time)} - {formatTime(s.end_time)}
-                  </Text>
-                  <Text style={[styles.detail, { color: colors.textMuted }]}>
-                    {s.booking_mode === 'TOKEN' ? 'Queue token booking' : 'Time-slot booking'}
-                  </Text>
-                  {s.booking_mode === 'TOKEN' ? (
-                    <Text style={[styles.note, { color: colors.warning }]}>
-                      A token is your place in the queue, not a guaranteed consultation time.
-                    </Text>
-                  ) : null}
-                  <View style={{ height: Spacing.md }} />
-                  {s.booking_mode === 'TOKEN' ? (
-                    <Button
-                      title="Book Token"
-                      onPress={() =>
-                        router.push({ pathname: '/booking/token', params: { sessionId: s.id } } as any)
-                      }
-                      variant="primary"
-                    />
-                  ) : (
-                    <Button
-                      title="Book Appointment"
-                      onPress={() =>
-                        router.push({ pathname: '/booking/slot', params: { sessionId: s.id } } as any)
-                      }
-                      variant="primary"
-                    />
-                  )}
-                </Card>
-              ))
+              days.map((day) => {
+                const key = `${link.id}:${day.date}`;
+                const expanded = openDays[key] ?? days.length === 1;
+
+                return (
+                  <View key={key}>
+                    <Pressable
+                      onPress={() => setOpenDays((prev) => ({ ...prev, [key]: !expanded }))}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded }}
+                    >
+                      <Card>
+                        <View style={styles.dayRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.sessionDate, { color: colors.text }]}>{dayLabel(day.date)}</Text>
+                            <Text style={[styles.detail, { color: colors.textMuted }]}>
+                              {day.items.map((s) => blockName(s)).join(', ')}
+                            </Text>
+                          </View>
+                          <Text style={[styles.toggle, { color: colors.primary }]}>{expanded ? 'Hide' : 'View'}</Text>
+                        </View>
+                      </Card>
+                    </Pressable>
+
+                    {expanded
+                      ? day.items.map((s) => (
+                          <View key={s.id} style={styles.subCard}>
+                            <Card>
+                              <Text style={[styles.blockTitle, { color: colors.text }]}>{blockName(s)}</Text>
+                              <Text style={[styles.detail, { color: colors.textMuted }]}>
+                                {formatTime(s.start_time)} - {formatTime(s.end_time)}
+                              </Text>
+                              <Text style={[styles.detail, { color: colors.textMuted }]}>
+                                {s.booking_mode === 'TOKEN' ? 'Queue token booking' : 'Time-slot booking'}
+                              </Text>
+                              {s.booking_mode === 'TOKEN' ? (
+                                <Text style={[styles.note, { color: colors.warning }]}>
+                                  A token is your place in the queue, not a guaranteed consultation time.
+                                </Text>
+                              ) : null}
+                              <View style={{ height: Spacing.md }} />
+                              {s.booking_mode === 'TOKEN' ? (
+                                <Button
+                                  title="Book Token"
+                                  onPress={() =>
+                                    router.push({ pathname: '/booking/token', params: { sessionId: s.id } } as any)
+                                  }
+                                  variant="primary"
+                                />
+                              ) : (
+                                <Button
+                                  title="Book Appointment"
+                                  onPress={() =>
+                                    router.push({ pathname: '/booking/slot', params: { sessionId: s.id } } as any)
+                                  }
+                                  variant="primary"
+                                />
+                              )}
+                            </Card>
+                          </View>
+                        ))
+                      : null}
+                  </View>
+                );
+              })
             )}
           </View>
         );
@@ -264,6 +334,10 @@ const styles = StyleSheet.create({
   directions: { marginBottom: Spacing.xs },
   sectionTitle: { fontSize: FontSize.heading, fontWeight: '600', marginTop: Spacing.md, marginBottom: Spacing.sm },
   sessionDate: { fontSize: FontSize.large, fontWeight: '600' },
+  dayRow: { flexDirection: 'row', alignItems: 'center' },
+  toggle: { fontSize: FontSize.body, fontWeight: '600', marginLeft: Spacing.md },
+  subCard: { marginLeft: Spacing.md },
+  blockTitle: { fontSize: FontSize.heading, fontWeight: '600' },
   note: { fontSize: FontSize.small, marginTop: Spacing.sm },
   feeLine: { fontSize: FontSize.heading, fontWeight: '600', marginBottom: Spacing.md },
-});              
+});    

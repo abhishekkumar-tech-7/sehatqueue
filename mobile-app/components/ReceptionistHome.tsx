@@ -5,6 +5,7 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { LoadingView, ErrorView, EmptyView } from './StateViews';
 import { supabase } from '../lib/supabase';
+import { useBookingsRealtime } from '../lib/useBookingsRealtime';
 import { Profile } from '../lib/AuthContext';
 import Colors from '../constants/Colors';
 import { Spacing, FontSize } from '../constants/Spacing';
@@ -17,8 +18,11 @@ type SessionRow = {
   booking_mode: 'TOKEN' | 'SLOT';
   capacity: number;
   status: string;
+  block_label: string | null;
   doctor_clinics: { doctors: { display_name: string } | null; clinics: { name: string } | null } | null;
 };
+
+type Counts = { online: number; walkIn: number };
 
 function formatTime(value: string) {
   const [h, m] = value.split(':').map(Number);
@@ -36,7 +40,7 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
   const colors = Colors[colorScheme as 'light' | 'dark'];
 
   const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [bookedCounts, setBookedCounts] = useState<Record<string, number>>({});
+  const [counts, setCounts] = useState<Record<string, Counts>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,7 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
     const { data, error: queryError } = await supabase
       .from('clinic_sessions')
       .select(
-        `id, session_date, start_time, end_time, booking_mode, capacity, status,
+        `id, session_date, start_time, end_time, booking_mode, capacity, status, block_label,
          doctor_clinics(doctors(display_name), clinics(name))`
       )
       .eq('session_date', today)
@@ -65,34 +69,38 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
     const sessionList = data as unknown as SessionRow[];
     setSessions(sessionList);
 
-    // Booked count per session. Cancelled and expired bookings free their spot;
-    // held, completed and skipped ones still count as used.
+    // Cancelled, expired and still-unpaid bookings are not counted.
     if (sessionList.length > 0) {
       const { data: bookingRows } = await supabase
         .from('bookings')
-        .select('session_id')
+        .select('session_id, source')
         .in('session_id', sessionList.map((s) => s.id))
-        .not('status', 'in', '(CANCELLED,EXPIRED)');
+        .not('status', 'in', '(CANCELLED,EXPIRED,PENDING)');
 
-      const counts: Record<string, number> = {};
+      const next: Record<string, Counts> = {};
       (bookingRows ?? []).forEach((b) => {
-        counts[b.session_id] = (counts[b.session_id] ?? 0) + 1;
+        const c = next[b.session_id] ?? { online: 0, walkIn: 0 };
+        if (b.source === 'WALK_IN') c.walkIn += 1;
+        else c.online += 1;
+        next[b.session_id] = c;
       });
-      setBookedCounts(counts);
+      setCounts(next);
     } else {
-      setBookedCounts({});
+      setCounts({});
     }
 
     setLoading(false);
     setRefreshing(false);
   }, []);
 
-  // Reload whenever this screen comes back into focus (e.g. after creating a session).
+  // Reload whenever this screen comes back into focus (e.g. after adding a walk-in).
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
+
+  useBookingsRealtime(load);
 
   if (loading) return <LoadingView message="Loading today's sessions..." />;
   if (error) {
@@ -111,7 +119,8 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
   const endedSessions = sessions.filter((s) => s.status === 'CLOSED' || s.status === 'CANCELLED');
 
   function renderSession(s: SessionRow, ended: boolean) {
-    const booked = bookedCounts[s.id] ?? 0;
+    const c = counts[s.id] ?? { online: 0, walkIn: 0 };
+    const booked = c.online + c.walkIn;
     const isFull = booked >= s.capacity;
     const ratio = s.capacity > 0 ? Math.min(booked / s.capacity, 1) : 0;
     const barColor = isFull ? colors.error : ratio >= 0.8 ? colors.warning : colors.success;
@@ -126,6 +135,7 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
         <Card>
           <Text style={[styles.doctorName, { color: colors.primary }]}>
             {s.doctor_clinics?.doctors?.display_name}
+            {s.block_label ? ` - ${s.block_label}` : ''}
           </Text>
           <Text style={[styles.detail, { color: colors.textMuted }]}>{s.doctor_clinics?.clinics?.name}</Text>
           <Text style={[styles.detail, { color: colors.text }]}>
@@ -137,7 +147,7 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
 
           <View style={styles.capacityRow}>
             <Text style={[styles.capacityText, { color: colors.text }]}>
-              {booked} / {s.capacity} booked
+              Online {c.online} | Walk-in {c.walkIn} | Total {booked} / {s.capacity}
             </Text>
             {isFull ? <Text style={[styles.fullBadge, { color: colors.error }]}>Full</Text> : null}
           </View>
@@ -174,9 +184,17 @@ export default function ReceptionistHome({ profile }: { profile: Profile }) {
           onPress={() => router.push('/doctor-portal/new-session' as any)}
           variant="primary"
         />
-      </View>
+        <View style={{ height: Spacing.sm }} />
+        <Button
+          title="Weekly Schedule"
+          onPress={() => router.push('/doctor-portal/schedule' as any)}
+          variant="secondary"
+        />
+      </View>    
 
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>Active sessions</Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        Active sessions (tap one to add a walk-in or manage the queue)
+      </Text>
       {activeSessions.length === 0 ? (
         <EmptyView
           title="No active sessions"
@@ -203,9 +221,9 @@ const styles = StyleSheet.create({
   doctorName: { fontSize: FontSize.heading, fontWeight: '600' },
   detail: { fontSize: FontSize.body, marginTop: Spacing.xs },
   capacityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.md },
-  capacityText: { fontSize: FontSize.body, fontWeight: '600' },
+  capacityText: { fontSize: FontSize.body, fontWeight: '600', flexShrink: 1 },
   fullBadge: { fontSize: FontSize.small, fontWeight: '700' },
   barTrack: { height: 8, borderRadius: 4, marginTop: Spacing.xs, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
   status: { fontSize: FontSize.small, fontWeight: '600', marginTop: Spacing.sm, textTransform: 'capitalize' },
-});    
+});     
