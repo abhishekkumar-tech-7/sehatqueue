@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, useColorScheme, Alert } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme, Alert, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Button } from '../../components/Button';
@@ -8,6 +8,23 @@ import Colors from '../../constants/Colors';
 import { Spacing, FontSize } from '../../constants/Spacing';
 
 type Phase = 'checkout' | 'paid' | 'failed';
+
+// Opens the chosen UPI app (PhonePe, Google Pay, Paytm...). Returns false if it can't.
+async function openUpiApp(url: string): Promise<boolean> {
+  try {
+    // Android "intent://pay?...#Intent;scheme=upi;package=...;end" -> "upi://pay?..."
+    const m = url.match(/^intent:\/\/(.*?)#Intent;(.*)$/);
+    if (m) {
+      const scheme = (m[2].match(/scheme=([^;]+)/) || [])[1] || 'upi';
+      await Linking.openURL(`${scheme}://${m[1]}`);
+      return true;
+    }
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export default function PayScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -39,6 +56,16 @@ export default function PayScreen() {
       .catch(function(e){ send({ type: "done", error: String(e) }); });
   } catch (e) { send({ type: "done", error: String(e) }); }
 </script></body></html>`;
+
+  // Normal web pages stay inside the app. Anything else (upi://, intent://, phonepe://) opens the app.
+  function handleNavigation(req: { url: string }) {
+    const u = req.url;
+    if (/^(https?:|about:|data:|blob:)/i.test(u)) return true;
+    openUpiApp(u).then((ok) => {
+      if (!ok) setNote('Could not open that UPI app. Pick another UPI app or scan the QR code.');
+    });
+    return false;
+  }
 
   async function checkOnce(manual = false) {
     const { data } = await supabase.from('payment_orders').select('status').eq('id', orderId).single();
@@ -121,6 +148,7 @@ export default function PayScreen() {
         domStorageEnabled
         thirdPartyCookiesEnabled
         setSupportMultipleWindows={false}
+        onShouldStartLoadWithRequest={handleNavigation}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
@@ -129,7 +157,7 @@ export default function PayScreen() {
               checkOnce();
             }
           } catch {
-            checkOnce();
+            checkOnce();   
           }
         }}
         style={{ flex: 1 }}

@@ -117,6 +117,11 @@ Deno.serve(async (req) => {
     return json({ error: 'Could not start the payment. Please try again.' }, 409);
   }
 
+  // UPI only by default (lowest fees). To allow every method again, run:
+  //   supabase secrets set CASHFREE_PAYMENT_METHODS=all
+  const configuredMethods = (Deno.env.get('CASHFREE_PAYMENT_METHODS') ?? 'upi').trim().toLowerCase();
+  const payMethods = configuredMethods === 'all' ? null : configuredMethods;
+
   // Our internal order UUID is also the Cashfree order_id.
   // deno-lint-ignore no-explicit-any
   const orderBody: Record<string, any> = {
@@ -129,8 +134,9 @@ Deno.serve(async (req) => {
       ...(profile?.email ? { customer_email: profile.email } : {}),
     },
     order_meta: {
-      notify_url:
+      notify_url:  
         Deno.env.get('CASHFREE_NOTIFY_URL') ?? `${url}/functions/v1/cashfree-webhook`,
+      ...(payMethods ? { payment_methods: payMethods } : {}),
       ...(Deno.env.get('CASHFREE_RETURN_URL') ? { return_url: Deno.env.get('CASHFREE_RETURN_URL') } : {}),
     },
   };
